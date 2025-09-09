@@ -1,0 +1,152 @@
+# GitHub Flow 옵션 - GitHub 표준 맞춤 워크플로우
+name: GitHub Flow Branch Validation (Alternative)
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  validate-github-flow:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      
+    steps:
+      - name: Validate GitHub Flow Pattern
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { context, github } = require('@actions/github');
+            
+            const sourceBranch = context.payload.pull_request.head.ref;
+            const targetBranch = context.payload.pull_request.base.ref;
+            const prTitle = context.payload.pull_request.title;
+            
+            console.log(`GitHub Flow 검증: ${sourceBranch} → ${targetBranch}`);
+            
+            // GitHub Flow 규칙 (모든 것이 main으로)
+            const githubFlowRules = {
+              // 모든 브랜치 → main 허용 (GitHub 표준)
+              allowedPatterns: [
+                /^feature\//,     // feature/* → main
+                /^fix\//,         // fix/* → main  
+                /^bugfix\//,      // bugfix/* → main
+                /^hotfix\//,      // hotfix/* → main
+                /^docs\//,        // docs/* → main
+                /^refactor\//,    // refactor/* → main
+                /^perf\//,        // perf/* → main
+                /^test\//,        // test/* → main
+                /^chore\//,       // chore/* → main
+                /^release\//,     // release/* → main (큰 릴리즈만)
+              ],
+              
+              // main만 타겟으로 허용
+              allowedTargets: ['main', 'master'],
+              
+              description: 'GitHub Flow: 모든 브랜치는 main으로만 병합 가능'
+            };
+            
+            let isValid = false;
+            let message = '';
+            
+            // GitHub Flow 검증
+            if (githubFlowRules.allowedTargets.includes(targetBranch)) {
+              // 소스 브랜치 패턴 검증
+              const isValidSource = githubFlowRules.allowedPatterns.some(pattern => 
+                pattern.test(sourceBranch)
+              );
+              
+              if (isValidSource) {
+                isValid = true;
+                message = `✅ **GitHub Flow 표준 준수**
+            
+            **브랜치 방향**: \`${sourceBranch}\` → \`${targetBranch}\`
+            **전략**: GitHub Flow (GitHub 공식 권장)
+            **상태**: 승인됨
+            
+            💡 **GitHub Flow 장점**:
+            - 단순하고 직관적인 워크플로우
+            - 빠른 배포 가능
+            - GitHub 완전 지원`;
+              } else {
+                isValid = false;
+                message = `❌ **브랜치 이름 규칙 위반**
+            
+            **소스 브랜치**: \`${sourceBranch}\`
+            **문제**: GitHub 표준 브랜치 명명 규칙에 맞지 않음
+            
+            **올바른 브랜치 이름 예시**:
+            - \`feature/user-authentication\`
+            - \`fix/login-bug\`
+            - \`hotfix/security-patch\`
+            - \`docs/update-readme\`
+            - \`refactor/api-cleanup\``;
+              }
+            } else {
+              isValid = false;
+              message = `❌ **GitHub Flow 규칙 위반**
+            
+            **타겟 브랜치**: \`${targetBranch}\`
+            **GitHub Flow 규칙**: 모든 브랜치는 \`main\`으로만 병합
+            
+            **해결 방법**:
+            1. PR 타겟을 \`main\` 브랜치로 변경
+            2. 또는 \`develop\` 브랜치를 제거하고 GitHub Flow 채택`;
+            }
+            
+            // PR에 코멘트 추가
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: message
+            });
+            
+            if (!isValid) {
+              console.error(message);
+              process.exit(1);
+            }
+            
+      - name: Suggest GitHub Merge Strategy
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { context, github } = require('@actions/github');
+            
+            const prTitle = context.payload.pull_request.title;
+            
+            // GitHub 권장 머지 전략 제안
+            let mergeStrategy = 'squash'; // GitHub 기본 권장
+            let explanation = '';
+            
+            if (/^(feat|feature)/.test(prTitle)) {
+              mergeStrategy = 'squash';
+              explanation = '새로운 기능 추가 - Squash merge로 깔끔한 히스토리 유지';
+            } else if (/^(fix|bugfix)/.test(prTitle)) {
+              mergeStrategy = 'squash';
+              explanation = '버그 수정 - Squash merge로 수정 히스토리 정리';
+            } else if (/^hotfix/.test(prTitle)) {
+              mergeStrategy = 'merge';
+              explanation = '긴급 수정 - Merge commit으로 명확한 수정 기록 유지';
+            } else if (/^release/.test(prTitle)) {
+              mergeStrategy = 'merge';
+              explanation = '릴리즈 - Merge commit으로 릴리즈 지점 명확 표시';
+            }
+            
+            const suggestionMessage = `🔄 **GitHub 권장 머지 전략**
+            
+            **제안된 전략**: ${mergeStrategy}
+            **이유**: ${explanation}
+            
+            **GitHub 머지 전략 가이드**:
+            - 🔸 **Squash and merge**: 기능/수정 (히스토리 정리)
+            - 🔸 **Create merge commit**: 릴리즈/핫픽스 (명확한 기록)
+            - 🔸 **Rebase and merge**: 작은 수정 (선형 히스토리)`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: suggestionMessage
+            });

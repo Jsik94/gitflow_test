@@ -1,0 +1,162 @@
+{
+  "branch_patterns": {
+    "description": "브랜치명 패턴에 따른 자동 라벨링 규칙",
+    "rules": {
+      "feature_branches": {
+        "patterns": ["^feature/", "^feat/"],
+        "labels": ["type:feature"],
+        "examples": ["feature/user-auth", "feat/payment-system"]
+      },
+      "fix_branches": {
+        "patterns": ["^fix/", "^bugfix/"],
+        "labels": ["type:fix"],
+        "examples": ["fix/login-error", "bugfix/memory-leak"]
+      },
+      "hotfix_branches": {
+        "patterns": ["^hotfix/"],
+        "labels": ["type:hotfix", "priority:high"],
+        "examples": ["hotfix/security-patch", "hotfix/critical-bug"]
+      },
+      "release_branches": {
+        "patterns": ["^release/", "^rel/"],
+        "labels": ["type:release", "versioning:semver"],
+        "examples": ["release/v1.2.0", "rel/2024-q1"]
+      },
+      "sync_branches": {
+        "patterns": ["^sync/", "^merge/"],
+        "labels": ["sync:release→develop"],
+        "examples": ["sync/main-to-develop", "merge/backmerge"]
+      }
+    }
+  },
+  "title_patterns": {
+    "description": "PR 제목 패턴에 따른 자동 라벨링 규칙",
+    "conventional_commits": {
+      "feat": {
+        "pattern": "^feat(\\(.+\\))?!?:",
+        "labels": ["type:feature"],
+        "examples": ["feat: add user authentication", "feat(auth)!: breaking auth changes"]
+      },
+      "fix": {
+        "pattern": "^fix(\\(.+\\))?!?:",
+        "labels": ["type:fix"],
+        "examples": ["fix: resolve login issue", "fix(api): handle null responses"]
+      },
+      "hotfix": {
+        "pattern": "^hotfix(\\(.+\\))?!?:",
+        "labels": ["type:hotfix", "priority:high"],
+        "examples": ["hotfix: patch security vulnerability", "hotfix(auth): fix critical auth bug"]
+      }
+    },
+    "korean_patterns": {
+      "feature": {
+        "pattern": "^(기능|feature)",
+        "labels": ["type:feature"],
+        "examples": ["기능: 사용자 인증 추가", "feature 결제 시스템 구현"]
+      },
+      "fix": {
+        "pattern": "^(수정|fix|버그)",
+        "labels": ["type:fix"],
+        "examples": ["수정: 로그인 오류 해결", "버그 수정 - 메모리 누수"]
+      },
+      "hotfix": {
+        "pattern": "^(긴급|핫픽스|hotfix)",
+        "labels": ["type:hotfix", "priority:high"],
+        "examples": ["긴급: 보안 취약점 패치", "핫픽스 - 결제 오류"]
+      },
+      "release": {
+        "pattern": "^(릴리스|release|배포)",
+        "labels": ["type:release"],
+        "examples": ["릴리스: v1.2.0 배포", "release 2024-Q1 버전"]
+      }
+    },
+    "priority_keywords": {
+      "high": {
+        "pattern": "(긴급|urgent|critical|hotfix|중요|important)",
+        "labels": ["priority:high"],
+        "examples": ["긴급 수정 필요", "critical bug fix", "중요한 기능 추가"]
+      }
+    },
+    "size_indicators": {
+      "xs": {
+        "pattern": "(minor|작은|소규모|tiny)",
+        "labels": ["size/XS"],
+        "examples": ["minor text update", "작은 버그 수정"]
+      },
+      "s": {
+        "pattern": "(small|작음|간단)",
+        "labels": ["size/S"],
+        "examples": ["small feature addition", "간단한 UI 개선"]
+      },
+      "m": {
+        "pattern": "(medium|보통|중간)",
+        "labels": ["size/M"],
+        "examples": ["medium complexity feature", "보통 규모의 리팩터링"]
+      },
+      "l": {
+        "pattern": "(large|큼|대규모)",
+        "labels": ["size/L"],
+        "examples": ["large system refactor", "대규모 기능 개발"]
+      },
+      "xl": {
+        "pattern": "(huge|매우|거대|massive)",
+        "labels": ["size/XL"],
+        "examples": ["huge architecture change", "거대한 시스템 변경"]
+      }
+    }
+  },
+  "content_analysis": {
+    "description": "PR 본문 내용 분석을 통한 라벨링",
+    "template_detection": {
+      "feature": {
+        "patterns": ["새로운 기능 추가", "# 새로운 기능", "기능 설명"],
+        "labels": ["type:feature"]
+      },
+      "fix": {
+        "patterns": ["버그 수정", "# 버그 수정", "문제 상황"],
+        "labels": ["type:fix"]
+      },
+      "hotfix": {
+        "patterns": ["긴급 핫픽스", "# 긴급 핫픽스", "🚨 긴급 이슈"],
+        "labels": ["type:hotfix", "priority:high"]
+      },
+      "release": {
+        "patterns": ["릴리스 \\(Main\\)", "# 릴리스", "릴리스 정보"],
+        "labels": ["type:release"]
+      },
+      "backmerge": {
+        "patterns": ["릴리스 백머지", "# 릴리스 백머지", "백머지 정보"],
+        "labels": ["sync:release→develop"]
+      }
+    },
+    "checkbox_analysis": {
+      "description": "체크박스 개수로 PR 크기 추정",
+      "size_mapping": {
+        "1-3": "size/XS",
+        "4-6": "size/S", 
+        "7-10": "size/M",
+        "11-15": "size/L",
+        "16+": "size/XL"
+      }
+    },
+    "breaking_changes": {
+      "patterns": ["breaking change", "!:", "major", "BREAKING"],
+      "labels": ["versioning:semver"]
+    }
+  },
+  "special_rules": {
+    "override_detection": {
+      "patterns": ["override", "무시", "강제", "skip"],
+      "labels": ["guard:override"],
+      "description": "특정 검증을 우회하는 경우"
+    },
+    "conflicting_labels": {
+      "description": "상충되는 라벨 그룹들 - 자동으로 중복 제거됨",
+      "groups": [
+        ["type:feature", "type:fix", "type:hotfix", "type:release"],
+        ["size/XS", "size/S", "size/M", "size/L", "size/XL"],
+        ["priority:high", "priority:medium", "priority:low"]
+      ]
+    }
+  }
+}
