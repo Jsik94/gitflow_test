@@ -1,0 +1,259 @@
+{
+  "templates": {
+    "feature": {
+      "title": "^(feat|fix|refactor|perf|test|docs|chore)(\\([\\w\\-\\/]+\\))?:\\s.+$",
+      "required_sections": [
+        "## 배경/목적",
+        "## 변경 사항",
+        "## 테스트 방법",
+        "## 위험/롤백",
+        "## 체크리스트"
+      ],
+      "requireReleaseNote": false,
+      "mergeStrategy": "squash",
+      "validation_rules": {
+        "## 배경/목적": {
+          "min_length": 20,
+          "pattern": ".*"
+        },
+        "## 변경 사항": {
+          "min_length": 20,
+          "pattern": ".*"
+        },
+        "## 테스트 방법": {
+          "min_length": 10,
+          "pattern": ".*"
+        },
+        "## 위험/롤백": {
+          "min_length": 10,
+          "pattern": ".*"
+        },
+        "## 체크리스트": {
+          "required_checkboxes": [
+            "코드 리뷰 요청 전 자체 리뷰 완료",
+            "관련 문서 업데이트 완료",
+            "테스트 케이스 추가/수정 완료"
+          ]
+        }
+      }
+    },
+    "fix": {
+      "title": "^(feat|fix|refactor|perf|test|docs|chore)(\\([\\w\\-\\/]+\\))?:\\s.+$",
+      "required_sections": [
+        "## 배경/목적",
+        "## 변경 사항", 
+        "## 테스트 방법",
+        "## 위험/롤백",
+        "## 체크리스트"
+      ],
+      "requireReleaseNote": false,
+      "mergeStrategy": "squash",
+      "validation_rules": {
+        "## 배경/목적": {
+          "min_length": 20,
+          "pattern": ".*"
+        },
+        "## 변경 사항": {
+          "min_length": 20,
+          "pattern": ".*"
+        },
+        "## 테스트 방법": {
+          "min_length": 10,
+          "pattern": ".*"
+        },
+        "## 위험/롤백": {
+          "min_length": 10,
+          "pattern": ".*"
+        },
+        "## 체크리스트": {
+          "required_checkboxes": [
+            "근본 원인 분석 완료",
+            "수정사항 검증 완료",
+            "관련 테스트 케이스 추가"
+          ]
+        }
+      }
+    },
+    "hotfix-main": {
+      "title": "^hotfix:\\s.+$",
+      "required_sections": [
+        "## 배경/목적",
+        "## 변경 사항",
+        "## 테스트 방법",
+        "## 위험/롤백",
+        "## 체크리스트",
+        "## 릴리즈 노트"
+      ],
+      "requireReleaseNote": true,
+      "mergeStrategy": "merge",
+      "validation_rules": {
+        "## 배경/목적": {
+          "min_length": 30,
+          "pattern": ".*",
+          "required_fields": [
+            "영향받는 사용자",
+            "영향받는 기능",
+            "심각도 레벨"
+          ]
+        },
+        "## 변경 사항": {
+          "min_length": 20,
+          "pattern": ".*"
+        },
+        "## 테스트 방법": {
+          "min_length": 15,
+          "pattern": ".*"
+        },
+        "## 위험/롤백": {
+          "min_length": 20,
+          "pattern": ".*"
+        },
+        "## 체크리스트": {
+          "required_checkboxes": [
+            "긴급성 확인",
+            "최소한의 변경으로 수정",
+            "사이드 이펙트 검토",
+            "배포 승인 획득"
+          ]
+        },
+        "## 릴리즈 노트": {
+          "min_length": 20,
+          "pattern": ".*"
+        }
+      }
+    },
+    "release-main": {
+      "title": "^release:\\sv?\\d+\\.\\d+\\.\\d+(-[\\w\\.\\+]+)?$",
+      "required_sections": [
+        "## 배경/목적",
+        "## 변경 사항",
+        "## 테스트 방법",
+        "## 위험/롤백",
+        "## 체크리스트",
+        "## 릴리즈 노트"
+      ],
+      "requireReleaseNote": true,
+      "mergeStrategy": "merge",
+      "validation_rules": {
+        "## 배경/목적": {
+          "min_length": 20,
+          "pattern": ".*",
+          "required_fields": [
+            "버전",
+            "릴리스 타입",
+            "예정 배포일"
+          ]
+        },
+        "## 변경 사항": {
+          "min_length": 30,
+          "pattern": ".*"
+        },
+        "## 테스트 방법": {
+          "min_length": 20,
+          "pattern": ".*"
+        },
+        "## 위험/롤백": {
+          "min_length": 15,
+          "pattern": ".*"
+        },
+        "## 체크리스트": {
+          "required_checkboxes": [
+            "모든 관련 PR 머지 완료",
+            "버전 태깅 준비",
+            "문서 업데이트 완료",
+            "팀 배포 승인 획득"
+          ]
+        },
+        "## 릴리즈 노트": {
+          "min_length": 30,
+          "pattern": ".*"
+        }
+      }
+    },
+    "release-backmerge": {
+      "title": "^chore\\(backmerge\\):\\sv?\\d+\\.\\d+\\.\\d+(-[\\w\\.\\+]+)?$",
+      "required_sections": [
+        "## 배경/목적",
+        "## 변경 사항",
+        "## 테스트 방법",
+        "## 위험/롤백",
+        "## 체크리스트"
+      ],
+      "requireReleaseNote": false,
+      "mergeStrategy": "squash-or-merge",
+      "validation_rules": {
+        "## 배경/목적": {
+          "min_length": 15,
+          "pattern": ".*",
+          "required_fields": [
+            "릴리스 버전",
+            "소스 브랜치",
+            "타겟 브랜치"
+          ]
+        },
+        "## 변경 사항": {
+          "min_length": 15,
+          "pattern": ".*"
+        },
+        "## 테스트 방법": {
+          "min_length": 10,
+          "pattern": ".*"
+        },
+        "## 위험/롤백": {
+          "min_length": 10,
+          "pattern": ".*"
+        },
+        "## 체크리스트": {
+          "required_checkboxes": [
+            "릴리스 완료 확인",
+            "백머지 필요성 확인",
+            "충돌 해결 완료",
+            "팀 리뷰 완료"
+          ]
+        }
+      }
+    }
+  },
+  "global_rules": {
+    "min_body_length": 50,
+    "required_checkboxes_ratio": 0.7,
+    "forbidden_words": [
+      "TODO",
+      "FIXME",
+      "임시"
+    ]
+  },
+  "branch_direction_rules": {
+    "description": "Gitflow 브랜치 방향 규칙",
+    "feature": {
+      "source_patterns": ["^feature/", "^feat/"],
+      "allowed_targets": ["develop"],
+      "description": "Feature 브랜치는 develop으로만 병합 가능"
+    },
+    "fix": {
+      "source_patterns": ["^fix/", "^bugfix/"],
+      "allowed_targets": ["develop"],
+      "description": "Fix 브랜치는 develop으로만 병합 가능"
+    },
+    "hotfix": {
+      "source_patterns": ["^hotfix/"],
+      "allowed_targets": ["main", "master"],
+      "description": "Hotfix 브랜치는 main/master로만 병합 가능"
+    },
+    "release": {
+      "source_patterns": ["^release/"],
+      "allowed_targets": ["main", "master", "develop"],
+      "description": "Release 브랜치는 main/master 또는 develop(백머지)로 병합 가능"
+    },
+    "develop": {
+      "source_patterns": ["^develop$"],
+      "allowed_targets": ["main", "master"],
+      "description": "Develop 브랜치는 main/master로만 병합 가능"
+    },
+    "main_backmerge": {
+      "source_patterns": ["^(main|master)$"],
+      "allowed_targets": ["develop"],
+      "description": "Main/master 브랜치는 develop으로만 백머지 가능"
+    }
+  }
+}

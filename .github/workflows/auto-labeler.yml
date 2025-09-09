@@ -1,0 +1,222 @@
+name: Auto Labeler
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+    
+jobs:
+  auto-label:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Auto Label by Branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { context, github } = require('@actions/github');
+            
+            // 브랜치 기반 라벨링 규칙
+            const branchLabels = {
+              // 기능 개발 브랜치
+              '^feature/': ['type:feature'],
+              '^feat/': ['type:feature'],
+              
+              // 버그 수정 브랜치
+              '^fix/': ['type:fix'],
+              '^bugfix/': ['type:fix'],
+              
+              // 핫픽스 브랜치
+              '^hotfix/': ['type:hotfix', 'priority:high'],
+              
+              // 릴리스 브랜치
+              '^release/': ['type:release', 'versioning:semver'],
+              
+              // 동기화 브랜치
+              '^sync/': ['sync:release→develop'],
+              
+              // 크기별 자동 분류 (브랜치명 패턴)
+              '/(xs|tiny|small)': ['size/XS'],
+              '/(sm|medium)': ['size/S'],
+              '/(md|large)': ['size/M'],
+              '/(lg|huge)': ['size/L'],
+              '/(xl|massive)': ['size/XL']
+            };
+            
+            const branchName = context.payload.pull_request.head.ref;
+            const labelsToAdd = [];
+            
+            // 브랜치명으로 라벨 결정
+            for (const [pattern, labels] of Object.entries(branchLabels)) {
+              const regex = new RegExp(pattern, 'i');
+              if (regex.test(branchName)) {
+                labelsToAdd.push(...labels);
+              }
+            }
+            
+            // 중복 제거
+            const uniqueLabels = [...new Set(labelsToAdd)];
+            
+            if (uniqueLabels.length > 0) {
+              console.log(`브랜치 "${branchName}"에서 감지된 라벨:`, uniqueLabels);
+              
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                labels: uniqueLabels
+              });
+            }
+            
+      - name: Auto Label by Title and Content
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { context, github } = require('@actions/github');
+            
+            const title = context.payload.pull_request.title;
+            const body = context.payload.pull_request.body || '';
+            const labelsToAdd = [];
+            
+            // 제목 기반 라벨링 규칙
+            const titleRules = {
+              // Conventional Commits 스타일
+              '^feat(\\(.+\\))?!?:': ['type:feature'],
+              '^fix(\\(.+\\))?!?:': ['type:fix'],
+              '^hotfix(\\(.+\\))?!?:': ['type:hotfix', 'priority:high'],
+              '^release(\\(.+\\))?!?:': ['type:release'],
+              
+              // 한국어 제목 패턴
+              '^(기능|feature)': ['type:feature'],
+              '^(수정|fix|버그)': ['type:fix'],
+              '^(긴급|핫픽스|hotfix)': ['type:hotfix', 'priority:high'],
+              '^(릴리스|release|배포)': ['type:release'],
+              '^(동기화|sync|백머지)': ['sync:release→develop'],
+              
+              // 우선순위 키워드
+              '(긴급|urgent|critical|hotfix)': ['priority:high'],
+              '(중요|important|high)': ['priority:high'],
+              
+              // 크기 키워드
+              '(minor|작은|소규모)': ['size/XS'],
+              '(small|작음|간단)': ['size/S'],
+              '(medium|보통|중간)': ['size/M'],
+              '(large|큼|대규모)': ['size/L'],
+              '(huge|매우|거대)': ['size/XL'],
+              
+              // Breaking Changes
+              '(breaking|!:|major)': ['versioning:semver'],
+              
+              // 특수 상황
+              '(override|무시|강제)': ['guard:override']
+            };
+            
+            // 제목으로 라벨 결정
+            for (const [pattern, labels] of Object.entries(titleRules)) {
+              const regex = new RegExp(pattern, 'i');
+              if (regex.test(title)) {
+                labelsToAdd.push(...labels);
+              }
+            }
+            
+            // PR 본문 기반 라벨링
+            const bodyRules = {
+              // 템플릿 감지
+              '새로운 기능 추가|# 새로운 기능': ['type:feature'],
+              '버그 수정|# 버그 수정': ['type:fix'],
+              '긴급 핫픽스|# 긴급 핫픽스': ['type:hotfix', 'priority:high'],
+              '릴리스 \\(Main\\)|# 릴리스 \\(Main\\)': ['type:release'],
+              '릴리스 백머지|# 릴리스 백머지': ['sync:release→develop'],
+              
+              // 체크박스 완성도로 크기 추정
+              '- \\[x\\]': 'CHECKBOX_COUNT',
+              '- \\[ \\]': 'CHECKBOX_TOTAL'
+            };
+            
+            // 본문으로 라벨 결정
+            let checkedCount = 0;
+            let totalCount = 0;
+            
+            for (const [pattern, labels] of Object.entries(bodyRules)) {
+              const regex = new RegExp(pattern, 'gi');
+              const matches = body.match(regex);
+              
+              if (pattern === '- \\[x\\]') {
+                checkedCount = matches ? matches.length : 0;
+              } else if (pattern === '- \\[ \\]') {
+                totalCount = matches ? matches.length : 0;
+              } else if (matches && Array.isArray(labels)) {
+                labelsToAdd.push(...labels);
+              }
+            }
+            
+            // 체크박스 완성도로 크기 추정
+            const totalCheckboxes = checkedCount + totalCount;
+            if (totalCheckboxes > 0) {
+              if (totalCheckboxes <= 3) labelsToAdd.push('size/XS');
+              else if (totalCheckboxes <= 6) labelsToAdd.push('size/S');
+              else if (totalCheckboxes <= 10) labelsToAdd.push('size/M');
+              else if (totalCheckboxes <= 15) labelsToAdd.push('size/L');
+              else labelsToAdd.push('size/XL');
+            }
+            
+            // 중복 제거
+            const uniqueLabels = [...new Set(labelsToAdd)];
+            
+            if (uniqueLabels.length > 0) {
+              console.log(`제목 "${title}"에서 감지된 라벨:`, uniqueLabels);
+              
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                labels: uniqueLabels
+              });
+            }
+            
+      - name: Remove Conflicting Labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { context, github } = require('@actions/github');
+            
+            // 상충되는 라벨 그룹들
+            const conflictingGroups = [
+              ['type:feature', 'type:fix', 'type:hotfix', 'type:release'],
+              ['size/XS', 'size/S', 'size/M', 'size/L', 'size/XL'],
+              ['priority:high', 'priority:medium', 'priority:low']
+            ];
+            
+            // 현재 PR의 라벨 가져오기
+            const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number
+            });
+            
+            const currentLabelNames = currentLabels.map(label => label.name);
+            
+            // 각 그룹에서 중복 라벨 제거
+            for (const group of conflictingGroups) {
+              const foundLabels = group.filter(label => currentLabelNames.includes(label));
+              
+              if (foundLabels.length > 1) {
+                // 첫 번째를 제외하고 나머지 제거
+                const labelsToRemove = foundLabels.slice(1);
+                
+                for (const labelToRemove of labelsToRemove) {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.payload.pull_request.number,
+                    name: labelToRemove
+                  });
+                  console.log(`중복 라벨 제거: ${labelToRemove}`);
+                }
+              }
+            }
