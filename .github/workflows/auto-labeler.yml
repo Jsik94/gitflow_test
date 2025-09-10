@@ -3,6 +3,9 @@ name: Auto Labeler
 on:
   pull_request:
     types: [opened, edited, synchronize]
+  workflow_run:
+    workflows: ["PR Template Selector & Auto Assignment"]
+    types: [completed]
     
 jobs:
   auto-label:
@@ -15,7 +18,52 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         
+      - name: Get PR Info
+        id: pr-info
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let prNumber, sourceBranch, targetBranch, prTitle, prBody;
+            
+            if (context.eventName === 'workflow_run') {
+              // workflow_run에서는 원본 PR 정보를 가져와야 함
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                head: `${context.repo.owner}:${context.payload.workflow_run.head_branch}`,
+                state: 'open'
+              });
+              
+              if (prs.data.length > 0) {
+                const pr = prs.data[0];
+                prNumber = pr.number;
+                sourceBranch = pr.head.ref;
+                targetBranch = pr.base.ref;
+                prTitle = pr.title;
+                prBody = pr.body;
+              } else {
+                console.log('No matching PR found for workflow_run');
+                return;
+              }
+            } else {
+              // 직접 PR 이벤트인 경우
+              prNumber = context.payload.pull_request.number;
+              sourceBranch = context.payload.pull_request.head.ref;
+              targetBranch = context.payload.pull_request.base.ref;
+              prTitle = context.payload.pull_request.title;
+              prBody = context.payload.pull_request.body;
+            }
+            
+            core.setOutput('pr-number', prNumber);
+            core.setOutput('source-branch', sourceBranch);
+            core.setOutput('target-branch', targetBranch);
+            core.setOutput('pr-title', prTitle);
+            core.setOutput('pr-body', prBody || '');
+            
+            console.log(`📋 PR 정보: ${sourceBranch} → ${targetBranch} (#${prNumber})`);
+        
       - name: Auto Label by Branch
+        if: steps.pr-info.outputs.pr-number
         uses: actions/github-script@v7
         with:
           script: |
@@ -48,13 +96,15 @@ jobs:
               '/(xl|massive)': ['size/XL']
             };
             
-            const branchName = context.payload.pull_request.head.ref;
+            const prNumber = parseInt('${{ steps.pr-info.outputs.pr-number }}');
+            const sourceBranch = '${{ steps.pr-info.outputs.source-branch }}';
+            
             const labelsToAdd = [];
             
             // 브랜치명으로 라벨 결정
             for (const [pattern, labels] of Object.entries(branchLabels)) {
               const regex = new RegExp(pattern, 'i');
-              if (regex.test(branchName)) {
+              if (regex.test(sourceBranch)) {
                 labelsToAdd.push(...labels);
               }
             }
@@ -63,24 +113,24 @@ jobs:
             const uniqueLabels = [...new Set(labelsToAdd)];
             
             if (uniqueLabels.length > 0) {
-              console.log(`브랜치 "${branchName}"에서 감지된 라벨:`, uniqueLabels);
+              console.log(`브랜치 "${sourceBranch}"에서 감지된 라벨:`, uniqueLabels);
               
               await github.rest.issues.addLabels({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
+                issue_number: prNumber,
                 labels: uniqueLabels
               });
             }
             
       - name: Auto Label by Title and Content
+        if: steps.pr-info.outputs.pr-number
         uses: actions/github-script@v7
         with:
           script: |
-            const { context, github } = require('@actions/github');
-            
-            const title = context.payload.pull_request.title;
-            const body = context.payload.pull_request.body || '';
+            const prNumber = parseInt('${{ steps.pr-info.outputs.pr-number }}');
+            const title = '${{ steps.pr-info.outputs.pr-title }}';
+            const body = '${{ steps.pr-info.outputs.pr-body }}';
             const labelsToAdd = [];
             
             // 제목 기반 라벨링 규칙
@@ -174,16 +224,17 @@ jobs:
               await github.rest.issues.addLabels({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
+                issue_number: prNumber,
                 labels: uniqueLabels
               });
             }
             
       - name: Remove Conflicting Labels
+        if: steps.pr-info.outputs.pr-number
         uses: actions/github-script@v7
         with:
           script: |
-            const { context, github } = require('@actions/github');
+            const prNumber = parseInt('${{ steps.pr-info.outputs.pr-number }}');
             
             // 상충되는 라벨 그룹들
             const conflictingGroups = [
@@ -196,7 +247,7 @@ jobs:
             const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number
+              issue_number: prNumber
             });
             
             const currentLabelNames = currentLabels.map(label => label.name);
@@ -213,7 +264,7 @@ jobs:
                   await github.rest.issues.removeLabel({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
-                    issue_number: context.payload.pull_request.number,
+                    issue_number: prNumber,
                     name: labelToRemove
                   });
                   console.log(`중복 라벨 제거: ${labelToRemove}`);

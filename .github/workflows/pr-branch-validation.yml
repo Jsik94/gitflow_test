@@ -3,6 +3,9 @@ name: PR Branch Direction Validation
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
+  workflow_run:
+    workflows: ["Auto Labeler"]
+    types: [completed]
 
 jobs:
   validate-pr-direction:
@@ -12,15 +15,56 @@ jobs:
       pull-requests: write
       
     steps:
-      - name: Validate Gitflow PR Direction
+      - name: Get PR Info
+        id: pr-info
         uses: actions/github-script@v7
         with:
           script: |
-            const { context, github } = require('@actions/github');
+            let sourceBranch, targetBranch, prTitle, prNumber;
             
-            const sourceBranch = context.payload.pull_request.head.ref;
-            const targetBranch = context.payload.pull_request.base.ref;
-            const prTitle = context.payload.pull_request.title;
+            if (context.eventName === 'workflow_run') {
+              // workflow_run에서는 원본 PR 정보를 가져와야 함
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                head: `${context.repo.owner}:${context.payload.workflow_run.head_branch}`,
+                state: 'open'
+              });
+              
+              if (prs.data.length > 0) {
+                const pr = prs.data[0];
+                sourceBranch = pr.head.ref;
+                targetBranch = pr.base.ref;
+                prTitle = pr.title;
+                prNumber = pr.number;
+              } else {
+                console.log('No matching PR found for workflow_run');
+                return;
+              }
+            } else {
+              // 직접 PR 이벤트인 경우
+              sourceBranch = context.payload.pull_request.head.ref;
+              targetBranch = context.payload.pull_request.base.ref;
+              prTitle = context.payload.pull_request.title;
+              prNumber = context.payload.pull_request.number;
+            }
+            
+            core.setOutput('source-branch', sourceBranch);
+            core.setOutput('target-branch', targetBranch);
+            core.setOutput('pr-title', prTitle);
+            core.setOutput('pr-number', prNumber);
+            
+            console.log(`🔍 브랜치 검증: ${sourceBranch} → ${targetBranch}`);
+        
+      - name: Validate Gitflow PR Direction
+        if: steps.pr-info.outputs.pr-number
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sourceBranch = '${{ steps.pr-info.outputs.source-branch }}';
+            const targetBranch = '${{ steps.pr-info.outputs.target-branch }}';
+            const prTitle = '${{ steps.pr-info.outputs.pr-title }}';
+            const prNumber = parseInt('${{ steps.pr-info.outputs.pr-number }}');
             
             console.log(`PR: ${sourceBranch} → ${targetBranch}`);
             console.log(`Title: ${prTitle}`);
@@ -131,7 +175,7 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
+                issue_number: prNumber,
                 body: violationMessage
               });
               
@@ -150,19 +194,19 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
+                issue_number: prNumber,
                 body: successMessage
               });
             }
             
       - name: Check Special Cases
+        if: steps.pr-info.outputs.pr-number
         uses: actions/github-script@v7
         with:
           script: |
-            const { context } = require('@actions/github');
-            
-            const sourceBranch = context.payload.pull_request.head.ref;
-            const targetBranch = context.payload.pull_request.base.ref;
+            const sourceBranch = '${{ steps.pr-info.outputs.source-branch }}';
+            const targetBranch = '${{ steps.pr-info.outputs.target-branch }}';
+            const prNumber = parseInt('${{ steps.pr-info.outputs.pr-number }}');
             
             // 특수 케이스 경고
             const warnings = [];
@@ -184,4 +228,31 @@ jobs:
             
             if (warnings.length > 0) {
               console.log('경고사항:', warnings.join('\n'));
+              
+              const warningMessage = `📋 **추가 안내사항**
+              
+${warnings.map(w => `- ${w}`).join('\n')}
+              
+문제가 있다면 관리자에게 문의하세요.
+
+🎉 **모든 PR 자동화가 완료되었습니다!**`;
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: warningMessage
+              });
+            } else {
+              // 경고사항이 없는 경우에도 완료 메시지
+              const completionMessage = `🎉 **모든 PR 자동화가 완료되었습니다!**
+              
+모든 검증을 통과했습니다. 이제 리뷰를 받고 병합을 진행하세요.`;
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: completionMessage
+              });
             }
