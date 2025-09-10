@@ -1,0 +1,166 @@
+# CODEOWNERS 파일
+# 이 파일은 GitHub에서 코드 소유권과 리뷰 책임을 정의합니다.
+# 
+# 현재 상태: 단일 소유자 (@jsik94)가 영역별로 책임 관리
+# 향후 팀 확장시 각 영역별 전문가로 변경 예정
+#
+# 문법: <파일패턴> <소유자1> <소유자2> ...
+# 더 구체적인 패턴이 일반적인 패턴보다 우선순위가 높습니다.
+
+# =============================================================================
+# 전역 기본 소유자 (모든 파일의 기본 소유자)
+# =============================================================================
+* @jsik94
+
+# =============================================================================
+# 1. 프로젝트 루트 설정 파일들 - 프로젝트 아키텍처 관련
+# =============================================================================
+package.json @jsik94
+package-lock.json @jsik94  
+pnpm-lock.yaml @jsik94
+pnpm-workspace.yaml @jsik94
+nx.json @jsik94
+tsconfig*.json @jsik94
+.gitignore @jsik94
+.editorconfig @jsik94
+.prettierrc @jsik94
+.prettierignore @jsik94
+eslint.config.* @jsik94
+
+# =============================================================================
+# 2. 프론트엔드 영역 - Client Side 코드
+# =============================================================================
+# React 클라이언트 전체
+apps/*/client/ @jsik94
+
+# React 컴포넌트 및 UI 관련
+**/*.tsx @jsik94
+**/*.jsx @jsik94
+**/*.css @jsik94
+**/*.scss @jsik94
+**/*.less @jsik94
+**/*.module.css @jsik94
+
+# 프론트엔드 설정 및 빌드
+**/vite.config.* @jsik94
+**/webpack.config.* @jsik94
+**/index.html @jsik94
+**/public/ @jsik94
+**/src/assets/ @jsik94
+
+# =============================================================================
+# 3. 백엔드 영역 - Server Side 코드  
+# =============================================================================
+# NestJS API 서버 전체
+apps/*/api-server/ @jsik94
+
+# NestJS 핵심 파일들
+**/*.controller.ts @jsik94
+**/*.service.ts @jsik94
+**/*.module.ts @jsik94
+**/*.dto.ts @jsik94
+**/*.entity.ts @jsik94
+**/*.repository.ts @jsik94
+**/*.guard.ts @jsik94
+**/*.middleware.ts @jsik94
+**/*.interceptor.ts @jsik94
+**/*.decorator.ts @jsik94
+
+# 백엔드 진입점 및 설정
+**/main.ts @jsik94
+**/app.module.ts @jsik94
+
+# =============================================================================
+# 4. 테스트 영역 - QA 및 Testing
+# =============================================================================
+# E2E 테스트
+apps/*-e2e/ @jsik94
+**/*.e2e.spec.ts @jsik94
+**/*.e2e.ts @jsik94
+
+# 단위 테스트
+**/*.spec.ts @jsik94
+**/*.test.ts @jsik94
+**/*.spec.tsx @jsik94
+**/*.test.tsx @jsik94
+
+# 테스트 설정
+**/jest.config.* @jsik94
+**/test-setup.ts @jsik94
+
+# =============================================================================
+# 5. DevOps 및 CI/CD 영역 - 인프라 및 배포
+# =============================================================================
+# GitHub 워크플로우 및 설정
+.github/ @jsik94
+.github/workflows/ @jsik94
+.github/CODEOWNERS @jsik94
+
+# Git 훅 및 자동화
+.husky/ @jsik94
+
+# 컨테이너 및 배포
+Dockerfile* @jsik94
+docker-compose* @jsik94
+.dockerignore @jsik94
+
+# 인프라 코드 (향후 추가될 수 있음)
+/infra/ @jsik94
+**/k8s/ @jsik94
+**/terraform/ @jsik94
+**/helm/ @jsik94
+
+# =============================================================================
+# 6. 문서화 영역 - Documentation
+# =============================================================================
+# 메인 문서들
+README.md @jsik94
+CHANGELOG.md @jsik94
+CONTRIBUTING.md @jsik94
+LICENSE @jsik94
+
+# 문서 디렉토리
+/docs/ @jsik94
+**/*.md @jsik94
+
+# =============================================================================
+# 7. 보안 및 환경변수 - Security Critical
+# =============================================================================
+# 환경 설정 파일들
+**/.env* @jsik94
+**/.environment* @jsik94
+**/secrets/ @jsik94
+
+# 보안 설정
+.github/workflows/*.yml @jsik94
+**/security/ @jsik94
+
+# =============================================================================
+# 8. 패키지 및 의존성 관리 - Dependency Management
+# =============================================================================
+# 의존성 락 파일들
+**/package-lock.json @jsik94
+**/yarn.lock @jsik94
+**/pnpm-lock.yaml @jsik94
+
+# 개별 앱의 패키지 설정
+apps/*/package.json @jsik94
+
+# =============================================================================
+# 향후 팀 확장시 적용할 구조 (참고용 주석)
+# =============================================================================
+# Frontend Team 추가시:
+# apps/*/client/ @frontend-lead @jsik94
+# **/*.tsx @frontend-lead @jsik94
+
+# Backend Team 추가시:  
+# apps/*/api-server/ @backend-lead @jsik94
+# **/*.controller.ts @backend-lead @jsik94
+
+# DevOps Team 추가시:
+# .github/ @devops-lead @jsik94
+# .husky/ @devops-lead @jsik94
+
+# QA Team 추가시:
+# apps/*-e2e/ @qa-lead @jsik94
+# **/*.spec.ts @qa-lead @jsik94

@@ -47,7 +47,7 @@ get_branch_type() {
 # 브랜치별 커밋 메시지 규칙 경로 가져오기
 get_commit_rule_path() {
     local branch_type="$1"
-    local script_dir="$(dirname "${BASH_SOURCE[0]}")"
+    local script_dir="$(dirname "$0")"
     local base_dir="$(dirname "$script_dir")"
     
     case "$branch_type" in
@@ -148,7 +148,7 @@ validate_commit_format() {
 }
 
 # 스크립트가 직접 실행될 때 테스트
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+if [[ "$0" == *"branch.sh"* ]]; then
     echo "=== 브랜치 헬퍼 테스트 ==="
     print_branch_info
     

@@ -11,6 +11,12 @@
     },
     {
       "path": "./apps/test-project/api-server"
+    },
+    {
+      "path": "./libs"
+    },
+    {
+      "path": "./tools/sample"
     }
   ]
 }
