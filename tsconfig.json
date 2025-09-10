@@ -4,10 +4,13 @@
   "files": [],
   "references": [
     {
-      "path": "./apps/test-e2e"
+      "path": "./apps/test-project/client"
     },
     {
-      "path": "./apps/test"
+      "path": "./apps/test-project/api-server-e2e"
+    },
+    {
+      "path": "./apps/test-project/api-server"
     }
   ]
 }

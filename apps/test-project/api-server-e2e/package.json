@@ -1,0 +1,26 @@
+{
+  "name": "@git-branch/api-server-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "implicitDependencies": [
+      "@git-branch/api-server"
+    ],
+    "targets": {
+      "e2e": {
+        "executor": "@nx/jest:jest",
+        "outputs": [
+          "{projectRoot}/test-output/jest/coverage"
+        ],
+        "options": {
+          "jestConfig": "apps/test-project/api-server-e2e/jest.config.ts",
+          "passWithNoTests": true
+        },
+        "dependsOn": [
+          "@git-branch/api-server:build",
+          "@git-branch/api-server:serve"
+        ]
+      }
+    }
+  }
+}

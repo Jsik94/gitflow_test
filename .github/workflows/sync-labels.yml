@@ -1,0 +1,143 @@
+name: Sync GitHub Labels
+
+on:
+  push:
+    branches: [main, master]
+    paths: ['.github/labels.yml']
+  workflow_dispatch: # 수동 실행 가능
+  
+jobs:
+  sync-labels:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+      
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Sync Labels from labels.yml
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const yaml = require('js-yaml');
+            
+            try {
+              // labels.yml 파일 읽기
+              const labelsFile = fs.readFileSync('.github/labels.yml', 'utf8');
+              const labels = yaml.load(labelsFile);
+              
+              console.log(`📋 ${labels.length}개의 라벨을 동기화합니다.`);
+              
+              // 현재 리포지토리의 라벨 목록 가져오기
+              const { data: existingLabels } = await github.rest.issues.listLabelsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100
+              });
+              
+              const existingLabelNames = existingLabels.map(label => label.name);
+              console.log(`🔍 기존 라벨 ${existingLabelNames.length}개 발견`);
+              
+              let created = 0;
+              let updated = 0;
+              let errors = 0;
+              
+              // 각 라벨 처리
+              for (const label of labels) {
+                try {
+                  const labelData = {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: label.name,
+                    color: label.color.replace('#', ''), // # 제거
+                    description: label.description || ''
+                  };
+                  
+                  if (existingLabelNames.includes(label.name)) {
+                    // 기존 라벨 업데이트
+                    await github.rest.issues.updateLabel(labelData);
+                    console.log(`✏️  업데이트: ${label.name}`);
+                    updated++;
+                  } else {
+                    // 새 라벨 생성
+                    await github.rest.issues.createLabel(labelData);
+                    console.log(`✨ 생성: ${label.name}`);
+                    created++;
+                  }
+                } catch (error) {
+                  console.error(`❌ 오류 (${label.name}): ${error.message}`);
+                  errors++;
+                }
+              }
+              
+              // 결과 요약
+              console.log('\n📊 동기화 결과:');
+              console.log(`  ✨ 생성된 라벨: ${created}개`);
+              console.log(`  ✏️  업데이트된 라벨: ${updated}개`); 
+              console.log(`  ❌ 오류: ${errors}개`);
+              
+              // PR 코멘트 (수동 실행이 아닌 경우)
+              if (context.eventName === 'push') {
+                const commentBody = `🏷️ **라벨 동기화 완료**
+              
+              **결과**:
+              - ✨ 생성: ${created}개
+              - ✏️ 업데이트: ${updated}개  
+              - ❌ 오류: ${errors}개
+              
+              **총 ${labels.length}개 라벨이 동기화되었습니다.**`;
+              
+                // 최신 commit에 코멘트 추가
+                await github.rest.repos.createCommitComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  commit_sha: context.sha,
+                  body: commentBody
+                });
+              }
+              
+            } catch (error) {
+              console.error('❌ 라벨 동기화 실패:', error.message);
+              process.exit(1);
+            }
+            
+      - name: Validate Auto-Labeler Configuration
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const yaml = require('js-yaml');
+            
+            // labels.yml에서 라벨 목록 읽기
+            const labelsFile = fs.readFileSync('.github/labels.yml', 'utf8');
+            const labels = yaml.load(labelsFile);
+            const labelNames = labels.map(label => label.name);
+            
+            console.log('🔍 자동 라벨러 설정 검증 중...');
+            
+            // auto-labeler.yml에서 사용되는 라벨들 확인
+            const autoLabelerFile = fs.readFileSync('.github/workflows/auto-labeler.yml', 'utf8');
+            
+            // 자동 라벨러에서 사용하는 라벨들 추출
+            const usedLabels = [
+              'type:feature', 'type:fix', 'type:hotfix', 'type:release',
+              'sync:release→develop', 'priority:high', 'versioning:semver',
+              'guard:override', 'size/XS', 'size/S', 'size/M', 'size/L', 'size/XL'
+            ];
+            
+            const missingLabels = usedLabels.filter(label => !labelNames.includes(label));
+            
+            if (missingLabels.length > 0) {
+              console.warn('⚠️ 자동 라벨러에서 사용하지만 labels.yml에 없는 라벨들:');
+              missingLabels.forEach(label => console.warn(`  - ${label}`));
+            } else {
+              console.log('✅ 모든 자동 라벨러 라벨이 정의되어 있습니다.');
+            }
+            
+            console.log(`\n📊 라벨 현황:`);
+            console.log(`  📋 정의된 라벨: ${labelNames.length}개`);
+            console.log(`  🤖 자동 라벨러 사용: ${usedLabels.length}개`);
+            console.log(`  ❌ 누락: ${missingLabels.length}개`);

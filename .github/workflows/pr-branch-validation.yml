@@ -1,0 +1,187 @@
+name: PR Branch Direction Validation
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  validate-pr-direction:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      
+    steps:
+      - name: Validate Gitflow PR Direction
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { context, github } = require('@actions/github');
+            
+            const sourceBranch = context.payload.pull_request.head.ref;
+            const targetBranch = context.payload.pull_request.base.ref;
+            const prTitle = context.payload.pull_request.title;
+            
+            console.log(`PR: ${sourceBranch} → ${targetBranch}`);
+            console.log(`Title: ${prTitle}`);
+            
+            // Gitflow 브랜치 방향 규칙
+            const gitflowRules = {
+              // Feature 브랜치 → develop만 허용
+              feature: {
+                pattern: /^feature\//,
+                allowedTargets: ['develop'],
+                description: 'Feature branches can only merge into develop'
+              },
+              
+              // Fix 브랜치 → develop만 허용  
+              fix: {
+                pattern: /^(fix|bugfix)\//,
+                allowedTargets: ['develop'],
+                description: 'Fix branches can only merge into develop'
+              },
+              
+              // Hotfix 브랜치 → main만 허용
+              hotfix: {
+                pattern: /^hotfix\//,
+                allowedTargets: ['main', 'master'],
+                description: 'Hotfix branches can only merge into main/master'
+              },
+              
+              // Release 브랜치 → main 또는 develop 허용
+              release: {
+                pattern: /^release\//,
+                allowedTargets: ['main', 'master', 'develop'],
+                description: 'Release branches can merge into main/master or develop'
+              },
+              
+              // Develop → main 허용 (최종 릴리즈)
+              develop: {
+                pattern: /^develop$/,
+                allowedTargets: ['main', 'master'],
+                description: 'Develop can only merge into main/master'
+              },
+              
+              // Main → develop 허용 (백머지)
+              main: {
+                pattern: /^(main|master)$/,
+                allowedTargets: ['develop'],
+                description: 'Main/master can only merge into develop (backmerge)'
+              }
+            };
+            
+            let ruleViolated = false;
+            let violationMessage = '';
+            
+            // 브랜치 규칙 검증
+            for (const [ruleName, rule] of Object.entries(gitflowRules)) {
+              if (rule.pattern.test(sourceBranch)) {
+                if (!rule.allowedTargets.includes(targetBranch)) {
+                  ruleViolated = true;
+                  violationMessage = `❌ **Gitflow 규칙 위반**
+            
+            **소스 브랜치**: \`${sourceBranch}\`
+            **타겟 브랜치**: \`${targetBranch}\`
+            **규칙**: ${rule.description}
+            **허용된 타겟**: ${rule.allowedTargets.join(', ')}
+            
+            올바른 브랜치 방향으로 PR을 다시 생성해주세요.`;
+                  break;
+                }
+              }
+            }
+            
+            // 제목 기반 추가 검증
+            const titleValidation = {
+              hotfix: {
+                pattern: /^hotfix:/,
+                requiredTarget: ['main', 'master'],
+                message: 'Hotfix 제목은 main/master 브랜치로만 병합 가능합니다.'
+              },
+              release: {
+                pattern: /^release:/,
+                requiredTarget: ['main', 'master'],
+                message: 'Release 제목은 main/master 브랜치로만 병합 가능합니다.'
+              },
+              backmerge: {
+                pattern: /^chore\(backmerge\):/,
+                requiredTarget: ['develop'],
+                message: 'Backmerge는 develop 브랜치로만 병합 가능합니다.'
+              }
+            };
+            
+            for (const [type, validation] of Object.entries(titleValidation)) {
+              if (validation.pattern.test(prTitle)) {
+                if (!validation.requiredTarget.includes(targetBranch)) {
+                  ruleViolated = true;
+                  violationMessage = `❌ **제목 기반 브랜치 규칙 위반**
+            
+            **PR 제목**: \`${prTitle}\`
+            **타겟 브랜치**: \`${targetBranch}\`
+            **필요한 타겟**: ${validation.requiredTarget.join(', ')}
+            
+            ${validation.message}`;
+                  break;
+                }
+              }
+            }
+            
+            if (ruleViolated) {
+              // PR에 코멘트 추가
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: violationMessage
+              });
+              
+              // 실패 상태 설정
+              console.error(violationMessage);
+              process.exit(1);
+            } else {
+              console.log('✅ Gitflow 브랜치 방향 규칙 통과');
+              
+              // 성공 코멘트 (선택적)
+              const successMessage = `✅ **Gitflow 규칙 준수**
+            
+            브랜치 방향: \`${sourceBranch}\` → \`${targetBranch}\`
+            상태: 승인됨`;
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: successMessage
+              });
+            }
+            
+      - name: Check Special Cases
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { context } = require('@actions/github');
+            
+            const sourceBranch = context.payload.pull_request.head.ref;
+            const targetBranch = context.payload.pull_request.base.ref;
+            
+            // 특수 케이스 경고
+            const warnings = [];
+            
+            // Release 브랜치가 develop으로 병합되는 경우 (백머지)
+            if (/^release\//.test(sourceBranch) && targetBranch === 'develop') {
+              warnings.push('⚠️ Release 브랜치를 develop으로 백머지하는 경우입니다. 충돌 해결에 주의하세요.');
+            }
+            
+            // Main에서 develop으로 백머지하는 경우
+            if (/^(main|master)$/.test(sourceBranch) && targetBranch === 'develop') {
+              warnings.push('⚠️ Main/master를 develop으로 백머지하는 경우입니다. 릴리즈 완료 후 진행하세요.');
+            }
+            
+            // 장기간 떨어진 브랜치 경고 (예시)
+            if (/^feature\//.test(sourceBranch)) {
+              warnings.push('💡 Feature 브랜치입니다. develop 브랜치와 충돌이 없는지 확인하세요.');
+            }
+            
+            if (warnings.length > 0) {
+              console.log('경고사항:', warnings.join('\n'));
+            }

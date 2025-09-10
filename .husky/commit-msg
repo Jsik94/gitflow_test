@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# Commit-msg hook
+# 커밋 메시지 검증을 위한 메인 스크립트
+
+commit_msg_file="$1"
+
+# 헬퍼 함수 로드
+script_dir="$(dirname "${BASH_SOURCE[0]}")"
+source "$script_dir/helpers/branch.sh"
+
+echo ""
+echo "📝 ================ 커밋 메시지 검증 ================"
+
+# 현재 브랜치 정보 가져오기
+current_branch=$(get_current_branch)
+branch_type=$(get_branch_type "$current_branch")
+rule_script=$(get_commit_rule_path "$branch_type")
+
+# 브랜치 정보 출력
+echo "🌿 현재 브랜치: $current_branch"
+echo "📋 브랜치 타입: $branch_type"
+echo "📝 적용 규칙: $(basename "$(dirname "$rule_script")")"
+
+# 커밋 메시지 읽기
+commit_msg=$(cat "$commit_msg_file")
+echo "💬 커밋 메시지: $commit_msg"
+
+echo ""
+echo "🔍 브랜치별 규칙 검증 시작..."
+
+# 브랜치별 규칙 스크립트 실행
+if [ -f "$rule_script" ]; then
+    if ! bash "$rule_script" "$commit_msg_file"; then
+        echo ""
+        echo "❌ 커밋 메시지 검증 실패!"
+        echo "=================================================="
+        exit 1
+    fi
+else
+    echo "⚠️  브랜치별 규칙 스크립트를 찾을 수 없습니다: $rule_script"
+    echo "💡 기본 규칙을 적용합니다."
+    
+    # 기본 규칙 (Conventional Commits)
+    basic_pattern="^(feat|fix|docs|style|refactor|test|chore|perf)(\(.+\))?: .{1,50}$"
+    merge_pattern="^Merge (branch|pull request)"
+    
+    if [[ ! $commit_msg =~ $basic_pattern ]] && [[ ! $commit_msg =~ $merge_pattern ]]; then
+        echo ""
+        echo "❌ 기본 커밋 메시지 규칙 위반!"
+        echo "📋 형식: type(scope): description"
+        echo "✅ 예시: feat(auth): 사용자 로그인 기능 추가"
+        exit 1
+    fi
+fi
+
+echo ""
+echo "🎉 커밋 메시지 검증이 완료되었습니다!"
+echo "=================================================="
+
+exit 0
