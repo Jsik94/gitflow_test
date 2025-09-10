@@ -67,8 +67,6 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const { context, github } = require('@actions/github');
-            
             // 브랜치 기반 라벨링 규칙
             const branchLabels = {
               // 기능 개발 브랜치
