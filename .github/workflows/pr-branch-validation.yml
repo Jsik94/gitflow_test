@@ -54,20 +54,25 @@ jobs:
             core.setOutput('pr-title', prTitle);
             core.setOutput('pr-number', prNumber);
             
-            console.log(`🔍 브랜치 검증: ${sourceBranch} → ${targetBranch}`);
+            console.log('🔍 브랜치 검증:', sourceBranch, '→', targetBranch);
         
       - name: Validate Gitflow PR Direction
         if: steps.pr-info.outputs.pr-number
         uses: actions/github-script@v7
+        env:
+          SOURCE_BRANCH: ${{ steps.pr-info.outputs.source-branch }}
+          TARGET_BRANCH: ${{ steps.pr-info.outputs.target-branch }}
+          PR_TITLE: ${{ steps.pr-info.outputs.pr-title }}
+          PR_NUMBER: ${{ steps.pr-info.outputs.pr-number }}
         with:
           script: |
-            const sourceBranch = '${{ steps.pr-info.outputs.source-branch }}';
-            const targetBranch = '${{ steps.pr-info.outputs.target-branch }}';
-            const prTitle = '${{ steps.pr-info.outputs.pr-title }}';
-            const prNumber = parseInt('${{ steps.pr-info.outputs.pr-number }}');
+            const sourceBranch = process.env.SOURCE_BRANCH;
+            const targetBranch = process.env.TARGET_BRANCH;
+            const prTitle = process.env.PR_TITLE;
+            const prNumber = parseInt(process.env.PR_NUMBER);
             
-            console.log(`PR: ${sourceBranch} → ${targetBranch}`);
-            console.log(`Title: ${prTitle}`);
+            console.log('PR:', sourceBranch, '→', targetBranch);
+            console.log('Title:', prTitle);
             
             // Gitflow 브랜치 방향 규칙
             const gitflowRules = {
@@ -202,11 +207,15 @@ jobs:
       - name: Check Special Cases
         if: steps.pr-info.outputs.pr-number
         uses: actions/github-script@v7
+        env:
+          SOURCE_BRANCH: ${{ steps.pr-info.outputs.source-branch }}
+          TARGET_BRANCH: ${{ steps.pr-info.outputs.target-branch }}
+          PR_NUMBER: ${{ steps.pr-info.outputs.pr-number }}
         with:
           script: |
-            const sourceBranch = '${{ steps.pr-info.outputs.source-branch }}';
-            const targetBranch = '${{ steps.pr-info.outputs.target-branch }}';
-            const prNumber = parseInt('${{ steps.pr-info.outputs.pr-number }}');
+            const sourceBranch = process.env.SOURCE_BRANCH;
+            const targetBranch = process.env.TARGET_BRANCH;
+            const prNumber = parseInt(process.env.PR_NUMBER);
             
             // 특수 케이스 경고
             const warnings = [];
