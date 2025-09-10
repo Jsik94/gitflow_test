@@ -1,0 +1,26 @@
+{
+  "name": "@git-branch/test-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "implicitDependencies": [
+      "@git-branch/test"
+    ],
+    "targets": {
+      "e2e": {
+        "executor": "@nx/jest:jest",
+        "outputs": [
+          "{projectRoot}/test-output/jest/coverage"
+        ],
+        "options": {
+          "jestConfig": "apps/test-e2e/jest.config.ts",
+          "passWithNoTests": true
+        },
+        "dependsOn": [
+          "@git-branch/test:build",
+          "@git-branch/test:serve"
+        ]
+      }
+    }
+  }
+}
