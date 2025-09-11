@@ -1,0 +1,21 @@
+name: "Hotfix"
+description: "버그/장애 수정"
+title: "hotfix: <요약>"
+labels: ["type:hotfix", "priority:urgent"]
+body:
+  - type: textarea
+    id: rca
+    attributes:
+      label: 원인(RCA)
+      description: 근본 원인/영향 범위
+    validations: { required: true }
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 재현 절차
+    validations: { required: true }
+  - type: textarea
+    id: rollback
+    attributes:
+      label: 롤백/완화 전략
+    validations: { required: true }

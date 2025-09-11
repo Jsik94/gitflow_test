@@ -1,0 +1,21 @@
+name: "Release Tracking"
+description: "릴리즈 단위 관리 이슈"
+title: "release: vX.Y.Z"
+labels: ["type:release"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 버전
+      placeholder: vX.Y.Z
+    validations: { required: true }
+  - type: textarea
+    id: scope
+    attributes:
+      label: 포함 항목(PR/이슈)
+      description: `- #123: ...` 목록으로 나열
+    validations: { required: true }
+  - type: textarea
+    id: notes
+    attributes:
+      label: 릴리즈 노트 초안

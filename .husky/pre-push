@@ -1,0 +1,142 @@
+#!/bin/bash
+
+# Pre-push hook
+# 푸시 전에 실행되는 검증 스크립트 (Nx affected 기반)
+
+# 헬퍼 스크립트 로드
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/helpers/nx-affected.sh"
+source "$SCRIPT_DIR/helpers/performance.sh"
+
+echo "🚀 Pre-push 검증 시작..."
+
+# 성능 최적화 시작
+start_time=$(date +%s)
+
+# 현재 브랜치 확인
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+log_info "현재 브랜치: $current_branch"
+
+# 원격 브랜치와의 차이점 확인
+remote_branch="origin/$current_branch"
+if git rev-parse --verify "$remote_branch" >/dev/null 2>&1; then
+    log_info "원격 브랜치와 비교 중..."
+    base_commit=$(git merge-base HEAD "$remote_branch")
+else
+    log_info "새로운 브랜치입니다. main 브랜치와 비교합니다."
+    base_commit=$(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD main 2>/dev/null || echo "")
+fi
+
+if [ -z "$base_commit" ]; then
+    log_warning "비교할 기준 커밋을 찾을 수 없습니다. 전체 프로젝트를 검증합니다."
+    base_commit="HEAD~1"
+fi
+
+log_info "기준 커밋: $base_commit"
+
+# Nx 워크스페이스 상태 확인
+if ! check_workspace_health; then
+    log_error "Nx 워크스페이스에 문제가 있습니다."
+    exit 1
+fi
+
+# Nx affected 프로젝트 확인
+log_info "Nx affected 프로젝트 분석 중..."
+
+# affected 프로젝트 목록 가져오기
+affected_projects=$(get_affected_projects "$base_commit")
+affected_apps=$(get_affected_apps "$base_commit")
+affected_libs=$(get_affected_libs "$base_commit")
+
+if [ -z "$affected_projects" ]; then
+    log_info "변경된 프로젝트가 없습니다."
+    log_success "Pre-push 검증 완료!"
+    exit 0
+fi
+
+# 프로젝트 상세 정보 출력
+show_project_details "$affected_projects"
+
+# 성능 최적화 실행
+log_info "성능 최적화 실행 중..."
+parallel_count=$(optimize_all "$base_commit" "$affected_projects")
+
+# Nx affected 검증 실행
+log_info "Nx affected 검증 실행 중..."
+
+# 1. 린트 검사 (affected 프로젝트만)
+if ! run_affected_command "lint" "$base_commit" "$parallel_count"; then
+    log_error "ESLint 검사 실패!"
+    log_info "다음 명령어로 문제를 수정해보세요:"
+    log_info "npx nx run-many --target=lint --affected --base=$base_commit --fix"
+    exit 1
+fi
+
+# 2. 타입 체크 (affected 프로젝트만)
+if ! run_affected_command "typecheck" "$base_commit" "$parallel_count"; then
+    log_error "TypeScript 타입 체크 실패!"
+    log_info "타입 오류를 수정한 후 다시 푸시해주세요."
+    exit 1
+fi
+
+# 3. 테스트 실행 (affected 프로젝트만)
+if ! run_affected_command "test" "$base_commit" "$((parallel_count > 2 ? 2 : parallel_count))"; then
+    log_error "테스트 실행 실패!"
+    log_info "테스트를 통과한 후 다시 푸시해주세요."
+    exit 1
+fi
+
+# 4. 빌드 검증 (앱 프로젝트가 변경된 경우만)
+if [ -n "$affected_apps" ]; then
+    log_info "빌드 검증 중..."
+    if ! run_affected_command "build" "$base_commit" "$((parallel_count > 2 ? 2 : parallel_count))"; then
+        log_error "빌드 실패!"
+        log_info "빌드 오류를 수정한 후 다시 푸시해주세요."
+        exit 1
+    fi
+fi
+
+# 5. 브랜치별 추가 검증
+log_info "브랜치별 검증 중..."
+
+# main 브랜치인 경우 추가 검증
+if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
+    log_info "main 브랜치 푸시 - 전체 프로젝트 검증"
+    # 전체 프로젝트 린트 검사
+    if ! npx nx run-many --target=lint --all --parallel="$parallel_count"; then
+        log_error "전체 프로젝트 린트 검사 실패!"
+        exit 1
+    fi
+    log_success "전체 프로젝트 린트 검사 통과!"
+fi
+
+# hotfix 브랜치인 경우 빠른 검증
+if [[ "$current_branch" == hotfix/* ]]; then
+    log_info "hotfix 브랜치 - 빠른 검증 모드"
+    # hotfix는 핵심 검증만 수행
+    log_success "hotfix 검증 완료!"
+fi
+
+# 6. 커스텀 검증 규칙
+log_info "커스텀 검증 규칙 체크 중..."
+
+# .husky/helpers/custom-checks.sh 실행 (존재하는 경우)
+if [ -f ".husky/helpers/custom-checks.sh" ]; then
+    if ! bash .husky/helpers/custom-checks.sh "$affected_projects"; then
+        log_error "커스텀 검증 실패!"
+        exit 1
+    fi
+    log_success "커스텀 검증 통과!"
+fi
+
+# 성능 메트릭 수집
+end_time=$(date +%s)
+measure_execution_time "$start_time" "$end_time" "Pre-push 검증"
+
+# 성능 통계 출력
+show_performance_stats
+
+log_success "모든 pre-push 검증이 완료되었습니다!"
+log_success "Pre-push 검증 통과!"
+
+exit 0
