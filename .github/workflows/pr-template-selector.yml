@@ -89,13 +89,20 @@ jobs:
                 const reviewersToAdd = codeowners.filter(reviewer => reviewer !== prAuthor);
                 
                 if (reviewersToAdd.length > 0) {
-                  await github.rest.pulls.requestReviewers({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    pull_number: prNumber,
-                    reviewers: reviewersToAdd
-                  });
-                  console.log('✅ 리뷰어 자동 할당:', reviewersToAdd.join(', '));
+                  try {
+                    await github.rest.pulls.requestReviewers({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      pull_number: prNumber,
+                      reviewers: reviewersToAdd
+                    });
+                    console.log('✅ 리뷰어 자동 할당:', reviewersToAdd.join(', '));
+                  } catch (reviewerError) {
+                    console.log('⚠️ 리뷰어 할당 실패 (개인 레포 제약):', reviewerError.message);
+                    // 리뷰어 할당 실패해도 다른 작업은 계속 진행
+                  }
+                } else {
+                  console.log('⚠️ 할당 가능한 리뷰어 없음 (PR 작성자와 CODEOWNERS가 동일)');
                 }
               }
               
@@ -161,7 +168,10 @@ jobs:
                 };
 
                 const templateStatus = templateFile ? templateName : '자동 선택 불가 (수동 작성 필요)';
-                const reviewerStatus = needsReviewers ? '@' + codeowners.filter(r => r !== prAuthor).join(', @') + ' 자동 할당' : '이미 설정됨';
+                const availableReviewers = codeowners.filter(r => r !== prAuthor);
+                const reviewerStatus = needsReviewers ? 
+                  (availableReviewers.length > 0 ? '@' + availableReviewers.join(', @') + ' 자동 할당' : '개인 레포 - 외부 리뷰어 없음') : 
+                  '이미 설정됨';
                 const titleSuggestion = suggestedTitle ? '**💡 제목 제안**: `' + suggestedTitle + '[설명 추가]`\n\n' : '';
                 const step1 = templateFile ? '템플릿에 맞춰 PR 설명 완성' : '적절한 PR 설명 작성';
                 const step2 = suggestedTitle ? '제목을 제안된 형식으로 변경' : '적절한 PR 제목 설정';
