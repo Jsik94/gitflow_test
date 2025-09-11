@@ -167,8 +167,7 @@ jobs:
                   labels: '🔄'
                 };
 
-                const templateStatus = templateFile ? templateName : '자동 선택 불가 (수동 작성 필요)';
-                const availableReviewers = codeowners.filter(r => r !== prAuthor);
+                const templateStatus = templateFile ? templateName : '자동 선택 불가 (수동 작성 필요)';g                const availableReviewers = codeowners.filter(r => r !== prAuthor);
                 const reviewerStatus = needsReviewers ? 
                   (availableReviewers.length > 0 ? '@' + availableReviewers.join(', @') + ' 자동 할당' : '개인 레포 - 외부 리뷰어 없음') : 
                   '이미 설정됨';
