@@ -1,11 +1,13 @@
 ## 📋 PR 정보
 - **브랜치**: `{{HEAD_REF}}` → `{{BASE_REF}}`
-- **타입 선택** (하나만 선택)
+- **타입 선택** (정확히 하나만 선택하세요)
   - [ ] feature (feat)
   - [ ] fix (bugfix 포함)
   - [ ] hotfix (main 긴급 수정)
   - [ ] release (main 배포)
   - [ ] release-backmerge (develop 백머지)
+
+> 위 체크박스 중 하나를 선택하고 PR을 저장하면, 해당 유형의 상세 템플릿이 아래 `INSERT` 위치에 자동으로 삽입됩니다. (수정 시에도 동작)
 
 ---
 
