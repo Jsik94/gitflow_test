@@ -140,8 +140,11 @@ jobs:
                   const templateContent = Buffer.from(templateData.content, 'base64').toString('utf8');
                   const currentBody = context.payload.pull_request.body || '';
                   
-                  // PR 본문이 비어있거나 매우 짧은 경우에만 템플릿 적용
-                  if (currentBody.trim().length < 50) {
+                  // 기본 템플릿이거나 비어있는 경우에만 템플릿 적용
+                  const isDefaultTemplate = currentBody.includes('PR 템플릿이 자동으로 선택됩니다') || 
+                                          currentBody.includes('자동 설정이 곧 완료됩니다');
+                  
+                  if (currentBody.trim().length < 100 || isDefaultTemplate) {
                     await github.rest.pulls.update({
                       owner: context.repo.owner,
                       repo: context.repo.repo,
