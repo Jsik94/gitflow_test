@@ -1,0 +1,221 @@
+name: PR Template Selector & Auto Assignment
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  pr-automation:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: PR Template Selection & Auto Assignment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sourceBranch = context.payload.pull_request.head.ref;
+            const targetBranch = context.payload.pull_request.base.ref;
+            const prNumber = context.payload.pull_request.number;
+            const prTitle = context.payload.pull_request.title;
+            const prAuthor = context.payload.pull_request.user.login;
+            const isDraft = context.payload.pull_request.draft;
+            
+            console.log('🔍 PR 분석:', sourceBranch, '→', targetBranch);
+            console.log('👤 작성자:', prAuthor);
+            console.log('📝 제목:', prTitle);
+            console.log('📋 Draft:', isDraft);
+            
+            // 1. 템플릿 선택 로직
+            let templateFile = '';
+            let templateName = '';
+            let suggestedTitle = '';
+            
+            if (/^feature\//.test(sourceBranch) && targetBranch === 'develop') {
+              templateFile = '.github/PULL_REQUEST_TEMPLATE/feature.md';
+              templateName = '새로운 기능 추가';
+              // 브랜치명에서 scope 추출 (feature/client-auth → client)
+              const branchName = sourceBranch.replace('feature/', '');
+              const scope = branchName.includes('-') ? branchName.split('-')[0] : 'core';
+              suggestedTitle = 'feat(' + scope + '): [요약] [TICKET]';
+            } else if (/^(fix|bugfix)\//.test(sourceBranch) && targetBranch === 'develop') {
+              templateFile = '.github/PULL_REQUEST_TEMPLATE/fix.md';
+              templateName = '버그 수정';
+              const branchName = sourceBranch.replace(/^(fix|bugfix)\//, '');
+              const scope = branchName.includes('-') ? branchName.split('-')[0] : 'core';
+              suggestedTitle = 'fix(' + scope + '): [요약] [TICKET]';
+            } else if (/^hotfix\//.test(sourceBranch) && /^(main|master)$/.test(targetBranch)) {
+              templateFile = '.github/PULL_REQUEST_TEMPLATE/hotfix-main.md';
+              templateName = '긴급 핫픽스 (Main)';
+              const branchName = sourceBranch.replace('hotfix/', '');
+              const scope = branchName.includes('-') ? branchName.split('-')[0] : 'core';
+              suggestedTitle = 'fix(' + scope + '): [긴급수정] [TICKET]';
+            } else if (/^release\//.test(sourceBranch) && /^(main|master)$/.test(targetBranch)) {
+              templateFile = '.github/PULL_REQUEST_TEMPLATE/release-main.md';
+              templateName = '릴리즈 (Main)';
+              const version = sourceBranch.replace('release/', '');
+              suggestedTitle = 'release: ' + version + ' [TICKET]';
+            } else if (/^release\//.test(sourceBranch) && targetBranch === 'develop') {
+              templateFile = '.github/PULL_REQUEST_TEMPLATE/release-backmerge.md';
+              templateName = '릴리즈 백머지';
+              const version = sourceBranch.replace('release/', '');
+              suggestedTitle = 'chore(release): backmerge ' + version + ' [TICKET]';
+            }
+
+            // 2. CODEOWNERS 기반 리뷰어 자동 할당
+            const codeowners = ['jsik94'];
+            
+            try {
+              // 현재 할당된 리뷰어 확인
+              const { data: currentReviewers } = await github.rest.pulls.listRequestedReviewers({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber
+              });
+              
+              const currentReviewerLogins = currentReviewers.users.map(user => user.login);
+              console.log('👀 현재 리뷰어:', currentReviewerLogins.join(', '));
+              
+              // 리뷰어가 없거나 작성자만 있는 경우 자동 할당
+              const needsReviewers = currentReviewerLogins.length === 0 || 
+                                   (currentReviewerLogins.length === 1 && currentReviewerLogins.includes(prAuthor));
+              
+              if (needsReviewers && !isDraft) {
+                const reviewersToAdd = codeowners.filter(reviewer => reviewer !== prAuthor);
+                
+                if (reviewersToAdd.length > 0) {
+                  try {
+                    await github.rest.pulls.requestReviewers({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      pull_number: prNumber,
+                      reviewers: reviewersToAdd
+                    });
+                    console.log('✅ 리뷰어 자동 할당:', reviewersToAdd.join(', '));
+                  } catch (reviewerError) {
+                    console.log('⚠️ 리뷰어 할당 실패 (개인 레포 제약):', reviewerError.message);
+                    // 리뷰어 할당 실패해도 다른 작업은 계속 진행
+                  }
+                } else {
+                  console.log('⚠️ 할당 가능한 리뷰어 없음 (PR 작성자와 CODEOWNERS가 동일)');
+                }
+              }
+              
+              // 3. 담당자(Assignee) 자동 설정
+              const { data: currentAssignees } = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber
+              });
+              
+              const currentAssigneeLogins = currentAssignees.assignees.map(user => user.login);
+              console.log('👥 현재 담당자:', currentAssigneeLogins.join(', '));
+              
+              // 담당자가 없는 경우 PR 작성자를 담당자로 설정
+              if (currentAssigneeLogins.length === 0) {
+                await github.rest.issues.addAssignees({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  assignees: [prAuthor]
+                });
+                console.log('✅ 담당자 자동 설정:', prAuthor);
+              }
+
+              // 4. 템플릿 적용 (PR이 처음 생성된 경우만)
+              if (context.payload.action === 'opened' && templateFile) {
+                try {
+                  // 템플릿 파일 읽기
+                  const { data: templateData } = await github.rest.repos.getContent({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    path: templateFile
+                  });
+                  
+                  const templateContent = Buffer.from(templateData.content, 'base64').toString('utf8');
+                  const currentBody = context.payload.pull_request.body || '';
+                  
+                  // PR 본문이 비어있거나 매우 짧은 경우에만 템플릿 적용
+                  if (currentBody.trim().length < 50) {
+                    await github.rest.pulls.update({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      pull_number: prNumber,
+                      body: templateContent
+                    });
+                    console.log('✅ 템플릿 적용 완료:', templateName);
+                  } else {
+                    console.log('⏭️ 템플릿 적용 건너뜀: PR 본문이 이미 작성됨 (' + currentBody.length + '자)');
+                  }
+                } catch (templateError) {
+                  console.error('❌ 템플릿 적용 실패:', templateError.message);
+                  // 템플릿 적용 실패해도 워크플로우는 계속 진행
+                }
+              }
+
+              // 5. 종합 상태 코멘트 (PR이 처음 생성된 경우만)
+              if (context.payload.action === 'opened') {
+                const statusEmojis = {
+                  template: templateFile ? '✅' : '⚠️',
+                  reviewers: needsReviewers ? '✅' : '✅',
+                  assignee: '✅',
+                  labels: '🔄'
+                };
+
+                const templateStatus = templateFile ? templateName : '자동 선택 불가 (수동 작성 필요)';
+                const availableReviewers = codeowners.filter(r => r !== prAuthor);
+                const reviewerStatus = needsReviewers ? 
+                  (availableReviewers.length > 0 ? '@' + availableReviewers.join(', @') + ' 자동 할당' : '개인 레포 - 외부 리뷰어 없음') : 
+                  '이미 설정됨';
+                const titleSuggestion = suggestedTitle ? '**💡 제목 제안**: `' + suggestedTitle + '[설명 추가]`\n\n' : '';
+                const step1 = templateFile ? '템플릿에 맞춰 PR 설명 완성' : '적절한 PR 설명 작성';
+                const step2 = suggestedTitle ? '제목을 제안된 형식으로 변경' : '적절한 PR 제목 설정';
+                
+                const commentBody = '🤖 **PR 자동 설정 완료**\n\n' +
+                  '**📋 설정 상태**:\n' +
+                  statusEmojis.template + ' **템플릿**: ' + templateStatus + '\n' +
+                  statusEmojis.reviewers + ' **리뷰어**: ' + reviewerStatus + '\n' +
+                  statusEmojis.assignee + ' **담당자**: @' + prAuthor + ' 자동 설정\n' +
+                  statusEmojis.labels + ' **라벨**: 자동 라벨러가 곧 적용할 예정\n\n' +
+                  '**🔀 브랜치**: `' + sourceBranch + '` → `' + targetBranch + '`\n\n' +
+                  titleSuggestion +
+                  '**📝 다음 단계**:\n' +
+                  '1. ' + step1 + '\n' +
+                  '2. ' + step2 + '\n' +
+                  '3. 테스트 및 검증 완료\n' +
+                  '4. 리뷰 요청\n\n' +
+                  '**🏷️ 라벨과 브랜치 검증은 다른 워크플로우에서 자동 처리됩니다!**';
+
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: commentBody
+                });
+              }
+
+            } catch (error) {
+              console.error('❌ PR 자동 설정 실패:', error.message);
+              
+              if (context.payload.action === 'opened') {
+                const errorBody = '⚠️ **PR 자동 설정 중 오류 발생**\n\n' +
+                  '**오류**: ' + error.message + '\n\n' +
+                  '**수동 설정 필요**:\n' +
+                  '- 리뷰어: @jsik94\n' +
+                  '- 담당자: @' + prAuthor + '\n' +
+                  '- 템플릿: [적절한 템플릿 선택](../tree/main/.github/PULL_REQUEST_TEMPLATE)\n\n' +
+                  '관리자에게 문의하세요.';
+                  
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: errorBody
+                });
+              }
+            }
