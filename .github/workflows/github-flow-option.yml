@@ -1,19 +1,19 @@
-# GitHub Flow 옵션 - GitHub 표준 맞춤 워크플로우
-name: GitHub Flow Branch Validation (Alternative)
+# GitFlow 옵션 - GitFlow 표준 맞춤 워크플로우
+name: GitFlow Branch Validation (Alternative)
 
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
 
 jobs:
-  validate-github-flow:
+  validate-gitflow:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
       
     steps:
-      - name: Validate GitHub Flow Pattern
+      - name: Validate GitFlow Pattern
         uses: actions/github-script@v7
         with:
           script: |
@@ -21,70 +21,99 @@ jobs:
             const targetBranch = context.payload.pull_request.base.ref;
             const prTitle = context.payload.pull_request.title;
             
-            console.log('GitHub Flow 검증:', sourceBranch, '→', targetBranch);
+            console.log('GitFlow 검증:', sourceBranch, '→', targetBranch);
             
-            // GitHub Flow 규칙 (모든 것이 main으로)
-            const githubFlowRules = {
-              // 모든 브랜치 → main 허용 (GitHub 표준)
-              allowedPatterns: [
-                /^feature\//,     // feature/* → main
-                /^fix\//,         // fix/* → main  
-                /^bugfix\//,      // bugfix/* → main
-                /^hotfix\//,      // hotfix/* → main
-                /^docs\//,        // docs/* → main
-                /^refactor\//,    // refactor/* → main
-                /^perf\//,        // perf/* → main
-                /^test\//,        // test/* → main
-                /^chore\//,       // chore/* → main
-                /^release\//,     // release/* → main (큰 릴리즈만)
-              ],
+            // GitFlow 규칙 (develop 중심의 브랜치 전략)
+            const gitflowRules = {
+              // GitFlow 표준 패턴별 허용 타겟
+              allowedPatterns: {
+                feature: {
+                  pattern: /^feature\//,
+                  allowedTargets: ['develop', 'feature'],  // develop 또는 다른 feature (협업)
+                  description: 'Feature branches merge into develop or other features'
+                },
+                fix: {
+                  pattern: /^(fix|bugfix)\//,
+                  allowedTargets: ['develop'],
+                  description: 'Fix branches merge into develop'
+                },
+                hotfix: {
+                  pattern: /^hotfix\//,
+                  allowedTargets: ['main', 'master', 'develop'],  // main 먼저, 그 다음 develop
+                  description: 'Hotfix branches merge into main/master and develop'
+                },
+                release: {
+                  pattern: /^release\//,
+                  allowedTargets: ['main', 'master', 'develop'],  // main으로 배포, develop으로 백머지
+                  description: 'Release branches merge into main/master and develop'
+                },
+                develop: {
+                  pattern: /^develop$/,
+                  allowedTargets: ['release'],  // develop은 release 브랜치 생성만
+                  description: 'Develop merges into release branches only'
+                }
+              },
               
-              // main만 타겟으로 허용
-              allowedTargets: ['main', 'master'],
-              
-              description: 'GitHub Flow: 모든 브랜치는 main으로만 병합 가능'
+              description: 'GitFlow: develop 중심의 브랜치 전략'
             };
             
             let isValid = false;
             let message = '';
+            let matchedRule = null;
             
-            // GitHub Flow 검증
-            if (githubFlowRules.allowedTargets.includes(targetBranch)) {
-              // 소스 브랜치 패턴 검증
-              const isValidSource = githubFlowRules.allowedPatterns.some(pattern => 
-                pattern.test(sourceBranch)
-              );
-              
-              if (isValidSource) {
-                isValid = true;
-                message = '✅ **GitHub Flow 표준 준수**\n\n' +
-                  '**브랜치 방향**: `' + sourceBranch + '` → `' + targetBranch + '`\n' +
-                  '**전략**: GitHub Flow (GitHub 공식 권장)\n' +
-                  '**상태**: 승인됨\n\n' +
-                  '💡 **GitHub Flow 장점**:\n' +
-                  '- 단순하고 직관적인 워크플로우\n' +
-                  '- 빠른 배포 가능\n' +
-                  '- GitHub 완전 지원';
-              } else {
-                isValid = false;
-                message = '❌ **브랜치 이름 규칙 위반**\n\n' +
-                  '**소스 브랜치**: `' + sourceBranch + '`\n' +
-                  '**문제**: GitHub 표준 브랜치 명명 규칙에 맞지 않음\n\n' +
-                  '**올바른 브랜치 이름 예시**:\n' +
-                  '- `feature/user-authentication`\n' +
-                  '- `fix/login-bug`\n' +
-                  '- `hotfix/security-patch`\n' +
-                  '- `docs/update-readme`\n' +
-                  '- `refactor/api-cleanup`';
+            // GitFlow 검증
+            for (const [ruleType, rule] of Object.entries(gitflowRules.allowedPatterns)) {
+              if (rule.pattern.test(sourceBranch)) {
+                matchedRule = rule;
+                
+                // 타겟 브랜치 체크 (정확한 매칭 또는 패턴 매칭)
+                let targetMatches = false;
+                if (ruleType === 'feature' && targetBranch === 'develop') {
+                  targetMatches = true;
+                } else if (ruleType === 'feature' && /^feature\//.test(targetBranch)) {
+                  targetMatches = true; // feature 간 협업
+                } else if (rule.allowedTargets.includes(targetBranch)) {
+                  targetMatches = true;
+                } else if (ruleType === 'develop' && /^release\//.test(targetBranch)) {
+                  targetMatches = true; // develop → release/*
+                }
+                
+                if (targetMatches) {
+                  isValid = true;
+                  message = '✅ **GitFlow 표준 준수**\n\n' +
+                    '**브랜치 방향**: `' + sourceBranch + '` → `' + targetBranch + '`\n' +
+                    '**전략**: GitFlow (develop 중심 브랜치 전략)\n' +
+                    '**규칙**: ' + rule.description + '\n' +
+                    '**상태**: 승인됨\n\n' +
+                    '💡 **GitFlow 장점**:\n' +
+                    '- 체계적인 릴리즈 관리\n' +
+                    '- 안정적인 프로덕션 브랜치\n' +
+                    '- 병렬 개발 지원';
+                } else {
+                  isValid = false;
+                  message = '❌ **GitFlow 규칙 위반**\n\n' +
+                    '**소스 브랜치**: `' + sourceBranch + '`\n' +
+                    '**타겟 브랜치**: `' + targetBranch + '`\n' +
+                    '**규칙**: ' + rule.description + '\n' +
+                    '**허용된 타겟**: ' + rule.allowedTargets.join(', ') + '\n\n' +
+                    '**해결 방법**: 올바른 GitFlow 패턴을 따라 PR을 다시 생성하세요.';
+                }
+                break;
               }
-            } else {
+            }
+            
+            // 매칭되는 규칙이 없는 경우
+            if (!matchedRule) {
               isValid = false;
-              message = '❌ **GitHub Flow 규칙 위반**\n\n' +
-                '**타겟 브랜치**: `' + targetBranch + '`\n' +
-                '**GitHub Flow 규칙**: 모든 브랜치는 `main`으로만 병합\n\n' +
-                '**해결 방법**:\n' +
-                '1. PR 타겟을 `main` 브랜치로 변경\n' +
-                '2. 또는 `develop` 브랜치를 제거하고 GitHub Flow 채택';
+              message = '❌ **알 수 없는 브랜치 패턴**\n\n' +
+                '**소스 브랜치**: `' + sourceBranch + '`\n' +
+                '**문제**: GitFlow 표준 브랜치 명명 규칙에 맞지 않음\n\n' +
+                '**올바른 브랜치 이름 예시**:\n' +
+                '- `feature/user-authentication`\n' +
+                '- `fix/login-bug`\n' +
+                '- `hotfix/security-patch`\n' +
+                '- `release/v1.2.0`\n' +
+                '- `develop`';
             }
             
             // PR에 코멘트 추가
@@ -100,37 +129,45 @@ jobs:
               process.exit(1);
             }
             
-      - name: Suggest GitHub Merge Strategy
+      - name: Suggest GitFlow Merge Strategy
         uses: actions/github-script@v7
         with:
           script: |
+            const sourceBranch = context.payload.pull_request.head.ref;
+            const targetBranch = context.payload.pull_request.base.ref;
             const prTitle = context.payload.pull_request.title;
             
-            // GitHub 권장 머지 전략 제안
-            let mergeStrategy = 'squash'; // GitHub 기본 권장
+            // GitFlow 권장 머지 전략 제안
+            let mergeStrategy = 'squash';
             let explanation = '';
             
-            if (/^(feat|feature)/.test(prTitle)) {
+            if (/^feature\//.test(sourceBranch) && targetBranch === 'develop') {
               mergeStrategy = 'squash';
-              explanation = '새로운 기능 추가 - Squash merge로 깔끔한 히스토리 유지';
-            } else if (/^(fix|bugfix)/.test(prTitle)) {
+              explanation = 'Feature → develop: Squash merge로 깔끔한 기능 단위 히스토리 유지';
+            } else if (/^feature\//.test(sourceBranch) && /^feature\//.test(targetBranch)) {
+              mergeStrategy = 'merge';
+              explanation = 'Feature 협업: Merge commit으로 협업 기록 보존';
+            } else if (/^(fix|bugfix)\//.test(sourceBranch) && targetBranch === 'develop') {
               mergeStrategy = 'squash';
-              explanation = '버그 수정 - Squash merge로 수정 히스토리 정리';
-            } else if (/^hotfix/.test(prTitle)) {
+              explanation = 'Fix → develop: Squash merge로 수정 히스토리 정리';
+            } else if (/^hotfix\//.test(sourceBranch)) {
               mergeStrategy = 'merge';
-              explanation = '긴급 수정 - Merge commit으로 명확한 수정 기록 유지';
-            } else if (/^release/.test(prTitle)) {
+              explanation = 'Hotfix: Merge commit으로 긴급 수정 기록 명확히 보존';
+            } else if (/^release\//.test(sourceBranch)) {
               mergeStrategy = 'merge';
-              explanation = '릴리즈 - Merge commit으로 릴리즈 지점 명확 표시';
+              explanation = 'Release: Merge commit으로 릴리즈 지점 명확 표시';
+            } else if (/^develop$/.test(sourceBranch)) {
+              mergeStrategy = 'merge';
+              explanation = 'Develop → release: Merge commit으로 릴리즈 시작점 기록';
             }
             
-            const suggestionMessage = '🔄 **GitHub 권장 머지 전략**\n\n' +
+            const suggestionMessage = '🔄 **GitFlow 권장 머지 전략**\n\n' +
               '**제안된 전략**: ' + mergeStrategy + '\n' +
               '**이유**: ' + explanation + '\n\n' +
-              '**GitHub 머지 전략 가이드**:\n' +
-              '- 🔸 **Squash and merge**: 기능/수정 (히스토리 정리)\n' +
-              '- 🔸 **Create merge commit**: 릴리즈/핫픽스 (명확한 기록)\n' +
-              '- 🔸 **Rebase and merge**: 작은 수정 (선형 히스토리)';
+              '**GitFlow 머지 전략 가이드**:\n' +
+              '- 🔸 **Squash and merge**: feature/fix → develop (깔끔한 히스토리)\n' +
+              '- 🔸 **Create merge commit**: release/hotfix (명확한 기록)\n' +
+              '- 🔸 **Merge commit**: 브랜치 간 병합점 보존이 중요한 경우';
             
             await github.rest.issues.createComment({
               owner: context.repo.owner,
