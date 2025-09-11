@@ -104,7 +104,7 @@ jobs:
             body = replaceTokens(body);
 
             // 5) PR 본문 업데이트 (코멘트 없이 본문만 변경)
-            await github.rest.pulls.update({
+            awadait github.rest.pulls.update({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: prNumber,
