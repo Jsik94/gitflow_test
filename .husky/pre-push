@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Pre-push hook (dummy skeleton)
 # - nx affected lint
@@ -6,7 +6,7 @@
 # - nx affected build (optional via ENABLE_AFFECTED_BUILD)
 # - Prisma validate & migration diff (only if backend affected)
 
-set -euo pipefail
+set -eu
 
 echo "🚀 pre-push 시작"
 
@@ -55,7 +55,8 @@ echo "[dummy] $NODE_BIN nx affected -t test --base \"$NX_BASE\" --head \"$NX_HEA
 # -------------------------------
 # Build (옵션, 더미)
 # -------------------------------
-if [ "${ENABLE_AFFECTED_BUILD,,}" = "true" ]; then
+ENABLE_AFFECTED_BUILD_LC=$(printf '%s' "$ENABLE_AFFECTED_BUILD" | tr '[:upper:]' '[:lower:]')
+if [ "$ENABLE_AFFECTED_BUILD_LC" = "true" ]; then
   echo "🏗️ nx affected build (옵션 활성화됨, 더미)"
   echo "[dummy] $NODE_BIN nx affected -t build --base \"$NX_BASE\" --head \"$NX_HEAD\" --parallel"
 else
@@ -66,7 +67,7 @@ fi
 # Prisma (백엔드 영향 시에만, 더미)
 # -------------------------------
 echo "🧭 backend 영향 탐지 태그: ${BACKEND_TAG}"
-if echo "$AFFECTED_PROJECTS" | grep -qi "$BACKEND_TAG"; then
+if printf '%s' "$AFFECTED_PROJECTS" | grep -qi "$BACKEND_TAG"; then
   echo "🗄️ Prisma validate & migration diff (더미)"
   echo "[dummy] $NODE_BIN prisma generate && $NODE_BIN prisma validate"
   echo "[dummy] $NODE_BIN prisma migrate diff --from-schema-datamodel ./prisma/schema.prisma --to-url $DATABASE_URL --script"
