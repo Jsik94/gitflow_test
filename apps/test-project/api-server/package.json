@@ -1,7 +1,15 @@
 {
   "name": "@git-branch/api-server",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
+  "files": [
+    "dist/**",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "nx": {
     "tags": [
       "release:publishable"
@@ -81,6 +89,15 @@
       "test": {
         "options": {
           "passWithNoTests": true
+        }
+      },
+      "nx-release-publish": {
+        "executor": "@nx/js:release-publish",
+        "dependsOn": [
+          "build"
+        ],
+        "options": {
+          "packageRoot": "{projectRoot}/dist"
         }
       }
     }
