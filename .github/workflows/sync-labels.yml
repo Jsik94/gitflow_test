@@ -17,20 +17,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         
-      - name: Install dependencies
-        run: npm install js-yaml
-      
       - name: Sync Labels from labels.yml
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const yaml = require('js-yaml');
             
             try {
               // labels.yml 파일 읽기
               const labelsFile = fs.readFileSync('.github/labels.yml', 'utf8');
-              const labels = yaml.load(labelsFile);
+              
+              // 간단한 YAML 파싱 (라벨용)
+              const labels = [];
+              const lines = labelsFile.split('\n');
+              let currentLabel = {};
+              
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('- name:')) {
+                  if (currentLabel.name) labels.push(currentLabel);
+                  currentLabel = { name: trimmed.replace('- name:', '').trim().replace(/"/g, '') };
+                } else if (trimmed.startsWith('color:')) {
+                  currentLabel.color = trimmed.replace('color:', '').trim().replace(/"/g, '');
+                } else if (trimmed.startsWith('description:')) {
+                  currentLabel.description = trimmed.replace('description:', '').trim().replace(/"/g, '');
+                }
+              }
+              if (currentLabel.name) labels.push(currentLabel);
               
               console.log(`📋 ${labels.length}개의 라벨을 동기화합니다.`);
               
@@ -112,11 +125,28 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const yaml = require('js-yaml');
             
             // labels.yml에서 라벨 목록 읽기
             const labelsFile = fs.readFileSync('.github/labels.yml', 'utf8');
-            const labels = yaml.load(labelsFile);
+            
+            // 간단한 YAML 파싱 (라벨용)
+            const labels = [];
+            const lines = labelsFile.split('\n');
+            let currentLabel = {};
+            
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('- name:')) {
+                if (currentLabel.name) labels.push(currentLabel);
+                currentLabel = { name: trimmed.replace('- name:', '').trim().replace(/"/g, '') };
+              } else if (trimmed.startsWith('color:')) {
+                currentLabel.color = trimmed.replace('color:', '').trim().replace(/"/g, '');
+              } else if (trimmed.startsWith('description:')) {
+                currentLabel.description = trimmed.replace('description:', '').trim().replace(/"/g, '');
+              }
+            }
+            if (currentLabel.name) labels.push(currentLabel);
+            
             const labelNames = labels.map(label => label.name);
             
             console.log('🔍 자동 라벨러 설정 검증 중...');
