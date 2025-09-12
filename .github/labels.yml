@@ -30,19 +30,28 @@
   description: "Jira 티켓 연결됨"
 - name: sync:release→develop
   color: "95A5A6"
+  description: "릴리스 백머지 동기화"
 - name: priority:high
   color: "D35400"
+  description: "높은 우선순위"
 - name: versioning:semver
   color: "27AE60"
+  description: "시맨틱 버저닝"
 - name: guard:override
   color: "7F8C8D"
+  description: "검증 우회"
 - name: size/XS
   color: "B3E5FC"
+  description: "매우 작은 변경"
 - name: size/S
   color: "81D4FA"
+  description: "작은 변경"
 - name: size/M
   color: "4FC3F7"
+  description: "보통 변경"
 - name: size/L
   color: "29B6F6"
+  description: "큰 변경"
 - name: size/XL
   color: "03A9F4"
+  description: "매우 큰 변경"
