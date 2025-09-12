@@ -42,36 +42,30 @@ jobs:
           # main으로의 PR이 아니면 스킵
           if [ "$TARGET_BRANCH" != "main" ]; then
             echo "needed=false" >> $GITHUB_OUTPUT
-            echo "target_branch=develop" >> $GITHUB_OUTPUT
             echo "Skipping backmerge: PR is not targeting main branch"
             exit 0
           fi
           
-          # Release 또는 Hotfix 브랜치인지 확인
-          if [[ "$SOURCE_BRANCH" =~ ^release/ ]]; then
+          # main 브랜치가 source 브랜치보다 앞서있는지 확인
+          git fetch origin main
+          BEHIND_COUNT=$(git rev-list --count origin/$SOURCE_BRANCH..origin/main)
+          
+          if [ "$BEHIND_COUNT" -gt 0 ]; then
             echo "needed=true" >> $GITHUB_OUTPUT
-            echo "target_branch=develop" >> $GITHUB_OUTPUT
-            echo "Release PR detected: will backmerge main to develop"
-          elif [[ "$SOURCE_BRANCH" =~ ^hotfix/ ]]; then
-            echo "needed=true" >> $GITHUB_OUTPUT
-            echo "target_branch=develop" >> $GITHUB_OUTPUT
-            echo "Hotfix PR detected: will backmerge main to develop"
+            echo "Backmerge needed: main is $BEHIND_COUNT commits ahead of $SOURCE_BRANCH"
           else
-            # main으로의 PR은 release/hotfix만 가능하므로 이 경우는 없어야 함
             echo "needed=false" >> $GITHUB_OUTPUT
-            echo "target_branch=develop" >> $GITHUB_OUTPUT
-            echo "Unexpected PR type: $SOURCE_BRANCH -> main (expected release/ or hotfix/)"
+            echo "No backmerge needed: $SOURCE_BRANCH is up to date with main"
           fi
       
       - name: Perform backmerge
         if: steps.check-backmerge.outputs.needed == 'true'
         run: |
           SOURCE_BRANCH="${{ steps.pr-info.outputs.source_branch }}"
-          TARGET_BRANCH="${{ steps.check-backmerge.outputs.target_branch }}"
           
-          # 타겟 브랜치로 체크아웃
-          git checkout $TARGET_BRANCH
-          git pull origin $TARGET_BRANCH
+          # source 브랜치로 체크아웃
+          git checkout $SOURCE_BRANCH
+          git pull origin $SOURCE_BRANCH
           
           # main 브랜치의 최신 변경사항을 merge
           git merge origin/main --no-edit
@@ -87,8 +81,8 @@ jobs:
             echo "No changes to push after merge"
           else
             # 변경사항 푸시
-            git push origin $TARGET_BRANCH
-            echo "Successfully backmerged main into $TARGET_BRANCH"
+            git push origin $SOURCE_BRANCH
+            echo "Successfully backmerged main into $SOURCE_BRANCH"
           fi
       
       - name: Create comment on PR
@@ -112,7 +106,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: ${{ steps.pr-info.outputs.pr_number }},
-                body: `✅ **Backmerge completed**\n\nSuccessfully merged latest changes from \`main\` into \`${{ steps.check-backmerge.outputs.target_branch }}\` branch.`
+                body: `✅ **Backmerge completed**\n\nSuccessfully merged latest changes from \`main\` into \`${{ steps.pr-info.outputs.source_branch }}\` branch.`
               });
             }
       
@@ -137,6 +131,6 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: ${{ steps.pr-info.outputs.pr_number }},
-                body: `ℹ️ **Backmerge skipped**\n\nNo backmerge needed: \`${{ steps.check-backmerge.outputs.target_branch }}\` branch is already up to date with \`main\`.`
+                body: `ℹ️ **Backmerge skipped**\n\nNo backmerge needed: \`${{ steps.pr-info.outputs.source_branch }}\` branch is already up to date with \`main\`.`
               });
             }
