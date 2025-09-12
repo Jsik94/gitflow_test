@@ -42,7 +42,20 @@ jobs:
               body = replaceTokens(body);
 
               // 이미 삽입된 흔적이 있으면 중복 삽입 방지
-              if (/TEMPLATE (\(|\-)/i.test(body) || /###\s+(🧩|🐛|🚨|🚀|🔄)/.test(body)) {
+              const templateMarkers = [
+                /<!-- INSERT:TEMPLATE -->/i,
+                /###\s+(🧩|🐛|🚨|🚀|🔄)/i,
+                /##\s+변경사항/i,
+                /##\s+체크리스트/i,
+                /##\s+테스트/i,
+                /##\s+관련 이슈/i,
+                /##\s+추가 정보/i,
+                /TEMPLATE (\(|\-)/i
+              ];
+              
+              const hasTemplate = templateMarkers.some(marker => marker.test(body));
+              
+              if (hasTemplate) {
                 // 본문만 토큰 최신 값으로 갱신
                 await github.rest.pulls.update({
                   owner: context.repo.owner,
@@ -50,7 +63,7 @@ jobs:
                   pull_number: prNumber,
                   body,
                 });
-                console.log('Template seems present. Updated tokens only.');
+                console.log('Template already present. Updated tokens only.');
                 return;
               }
 
@@ -125,7 +138,14 @@ jobs:
               if (body.includes(sentinel)) {
                 body = body.replace(sentinel, template);
               } else {
-                body = (body ? body + '\n\n' : '') + template;
+                // 템플릿이 이미 있는지 한 번 더 확인
+                const hasExistingTemplate = templateMarkers.some(marker => marker.test(body));
+                if (!hasExistingTemplate) {
+                  body = (body ? body + '\n\n' : '') + template;
+                } else {
+                  console.log('Template already exists, skipping insertion');
+                  return;
+                }
               }
 
               // 5-a) 최종 본문에 토큰 한 번 더 치환
