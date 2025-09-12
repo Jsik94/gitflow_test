@@ -1,0 +1,79 @@
+#!/bin/sh
+
+# Pre-push hook (dummy skeleton)
+# - nx affected lint
+# - nx affected test
+# - nx affected build (optional via ENABLE_AFFECTED_BUILD)
+# - Prisma validate & migration diff (only if backend affected)
+
+set -eu
+
+echo "🚀 pre-push 시작"
+
+# -------------------------------
+# 설정 (필요 시 수정)
+# -------------------------------
+: "${ENABLE_AFFECTED_BUILD:=false}"     # true 로 설정하면 build도 수행
+: "${BACKEND_TAG:=backend}"             # 백엔드 감지용 태그/이름(예: backend, api, nest 등)
+: "${NODE_BIN:=npx}"                    # npx/pnpm dlx 등 선택 가능 (예: pnpm dlx)
+: "${NX_HEAD:=HEAD}"
+
+# 업스트림이 존재하면 해당 브랜치와의 공통 조상을 base로 사용
+if git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1; then
+  UPSTREAM_REF=$(git rev-parse --abbrev-ref --symbolic-full-name @{u})
+  NX_BASE="origin/${UPSTREAM_REF#*/}"
+else
+  # 없으면 origin/HEAD와의 공통 조상 또는 직전 커밋 사용
+  NX_BASE=$(git merge-base HEAD origin/HEAD 2>/dev/null || echo HEAD~1)
+fi
+
+echo "🔎 nx affected 범위: base=${NX_BASE} head=${NX_HEAD}"
+
+# -------------------------------
+# Affected 목록 확인 (이름만)
+# -------------------------------
+AFFECTED_PROJECTS=$($NODE_BIN nx print-affected --base "$NX_BASE" --head "$NX_HEAD" --select projects --plain 2>/dev/null || echo "")
+echo "📦 affected projects: ${AFFECTED_PROJECTS}"
+
+if [ -z "$AFFECTED_PROJECTS" ]; then
+  echo "✅ 영향받은 프로젝트가 없습니다. pre-push 종료"
+  exit 0
+fi
+
+# -------------------------------
+# Lint (더미)
+# -------------------------------
+echo "🧹 nx affected lint (더미)"
+echo "[dummy] $NODE_BIN nx affected -t lint --base \"$NX_BASE\" --head \"$NX_HEAD\" --parallel"
+
+# -------------------------------
+# Test (더미)
+# -------------------------------
+echo "🧪 nx affected test (더미)"
+echo "[dummy] $NODE_BIN nx affected -t test --base \"$NX_BASE\" --head \"$NX_HEAD\" --parallel --ci"
+
+# -------------------------------
+# Build (옵션, 더미)
+# -------------------------------
+ENABLE_AFFECTED_BUILD_LC=$(printf '%s' "$ENABLE_AFFECTED_BUILD" | tr '[:upper:]' '[:lower:]')
+if [ "$ENABLE_AFFECTED_BUILD_LC" = "true" ]; then
+  echo "🏗️ nx affected build (옵션 활성화됨, 더미)"
+  echo "[dummy] $NODE_BIN nx affected -t build --base \"$NX_BASE\" --head \"$NX_HEAD\" --parallel"
+else
+  echo "⏭️ nx affected build 건너뜀 (ENABLE_AFFECTED_BUILD=false)"
+fi
+
+# -------------------------------
+# Prisma (백엔드 영향 시에만, 더미)
+# -------------------------------
+echo "🧭 backend 영향 탐지 태그: ${BACKEND_TAG}"
+if printf '%s' "$AFFECTED_PROJECTS" | grep -qi "$BACKEND_TAG"; then
+  echo "🗄️ Prisma validate & migration diff (더미)"
+  echo "[dummy] $NODE_BIN prisma generate && $NODE_BIN prisma validate"
+  echo "[dummy] $NODE_BIN prisma migrate diff --from-schema-datamodel ./prisma/schema.prisma --to-url $DATABASE_URL --script"
+else
+  echo "⏭️ backend 영향 없음 → Prisma 단계 건너뜀"
+fi
+
+echo "✅ pre-push 더미 검사 완료"
+exit 0

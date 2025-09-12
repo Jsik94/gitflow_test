@@ -1,0 +1,142 @@
+name: PR Template Inserter
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  insert-template:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Insert sub-template into PR body
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            (async () => {
+              const pr = context.payload.pull_request;
+              const prNumber = pr.number;
+              const head = pr.head.ref || '';
+              const base = pr.base.ref || '';
+
+              // 1) 현재 PR 본문 가져오기
+              const current = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+              });
+              let body = current.data.body || '';
+
+              // 1-a) 토큰 치환 (항상 수행)
+              const replaceTokens = (text) =>
+                (text || '')
+                  .replace(/\{\{HEAD_REF\}\}/g, head)
+                  .replace(/\{\{BASE_REF\}\}/g, base);
+              body = replaceTokens(body);
+
+              // 이미 삽입된 흔적이 있으면 중복 삽입 방지
+              if (/TEMPLATE (\(|\-)/i.test(body) || /###\s+(🧩|🐛|🚨|🚀|🔄)/.test(body)) {
+                // 본문만 토큰 최신 값으로 갱신
+                await github.rest.pulls.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber,
+                  body,
+                });
+                console.log('Template seems present. Updated tokens only.');
+                return;
+              }
+
+              // 2) 체크박스 선택 확인 (사용자 선택이 있으면 우선)
+              const typeMatch = body.match(/- \[x\] *(feature|fix|hotfix|release(?:-backmerge)?)/i);
+              let selected = typeMatch ? (typeMatch[1] || '').toLowerCase() : '';
+
+              // 3) 템플릿 경로 결정 (선택 > base+head 매핑)
+              let path = null;
+              if (selected) {
+                switch (selected) {
+                  case 'feature':
+                    path = '.github/PULL_REQUEST_TEMPLATE/feature.md';
+                    break;
+                  case 'fix':
+                    path = '.github/PULL_REQUEST_TEMPLATE/fix.md';
+                    break;
+                  case 'hotfix':
+                    path = '.github/PULL_REQUEST_TEMPLATE/hotfix-main.md';
+                    break;
+                  case 'release':
+                    path = '.github/PULL_REQUEST_TEMPLATE/release-main.md';
+                    break;
+                  case 'release-backmerge':
+                    path = '.github/PULL_REQUEST_TEMPLATE/release-backmerge.md';
+                    break;
+                }
+              }
+
+              if (!path) {
+                if (/^(main|master)$/i.test(base)) {
+                  if (/^hotfix\//i.test(head)) path = '.github/PULL_REQUEST_TEMPLATE/hotfix-main.md';
+                  else if (/^release\//i.test(head)) path = '.github/PULL_REQUEST_TEMPLATE/release-main.md';
+                  else path = '.github/PULL_REQUEST_TEMPLATE/release-main.md';
+                } else if (/^develop(ment)?$/i.test(base)) {
+                  if (/^release\//i.test(head)) path = '.github/PULL_REQUEST_TEMPLATE/release-backmerge.md';
+                  else if (/^(feature|feat)\//i.test(head)) path = '.github/PULL_REQUEST_TEMPLATE/feature.md';
+                  else if (/^(fix|bugfix)\//i.test(head)) path = '.github/PULL_REQUEST_TEMPLATE/fix.md';
+                  else path = '.github/PULL_REQUEST_TEMPLATE/feature.md';
+                } else {
+                  // 기타 타겟 브랜치: 기본값은 feature
+                  if (/^release\//i.test(head)) path = '.github/PULL_REQUEST_TEMPLATE/release-backmerge.md';
+                  else if (/^hotfix\//i.test(head)) path = '.github/PULL_REQUEST_TEMPLATE/hotfix-main.md';
+                  else if (/^(fix|bugfix)\//i.test(head)) path = '.github/PULL_REQUEST_TEMPLATE/fix.md';
+                  else path = '.github/PULL_REQUEST_TEMPLATE/feature.md';
+                }
+              }
+
+              // 4) 템플릿 파일 로드 (repo에서)
+              let template = '';
+              try {
+                const content = await github.rest.repos.getContent({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  path,
+                });
+                template = Buffer.from(content.data.content, 'base64').toString('utf8').trim();
+              } catch (e) {
+                console.log('Template not found, path:', path, 'error:', e.message);
+                // 토큰만 반영해 업데이트
+                await github.rest.pulls.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber,
+                  body,
+                });
+                return;
+              }
+
+              // 5) 센티널 기준 삽입 또는 본문 끝에 추가
+              const sentinel = '<!-- INSERT:TEMPLATE -->';
+              if (body.includes(sentinel)) {
+                body = body.replace(sentinel, template);
+              } else {
+                body = (body ? body + '\n\n' : '') + template;
+              }
+
+              // 5-a) 최종 본문에 토큰 한 번 더 치환
+              body = replaceTokens(body);
+
+              // 6) PR 본문 업데이트 (코멘트 없이 본문만 변경)
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+                body,
+              });
+              console.log('Template inserted from', path, 'for', head, '→', base, 'selected:', selected || '(none)');
+            })().catch(e => core.setFailed(e.message));
