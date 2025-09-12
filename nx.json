@@ -148,7 +148,11 @@
       "tag": true
     },
     "projects": [
-      "tag:release:publishable"
+      "*",
+      "!some-private-package",
+      "!**/*-e2e",
+      "!tools/**",
+      "!libs/**"
     ] 
   }
 }

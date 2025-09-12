@@ -12,7 +12,8 @@
   },
   "nx": {
     "tags": [
-      "release:publishable"
+      "type:app",
+      "scope:api"
     ],
     "targets": {
       "build": {
