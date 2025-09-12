@@ -1,20 +1,9 @@
 {
-  "name": "@git-branch/api-server",
-  "version": "0.1.1",
-  "private": false,
-  "files": [
-    "dist/**",
-    "README.md",
-    "LICENSE"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
+  "name": "@git-branch/backend-server",
+  "version": "0.0.1",
+  "private": true,
   "nx": {
-    "tags": [
-      "type:app",
-      "scope:api"
-    ],
+    "tags":["type:app","scope:groups"],
     "targets": {
       "build": {
         "executor": "nx:run-commands",
@@ -23,7 +12,7 @@
           "args": [
             "--node-env=production"
           ],
-          "cwd": "apps/test-project/api-server"
+          "cwd": "apps/groups/backend-server"
         },
         "configurations": {
           "development": {
@@ -40,8 +29,8 @@
         "cache": true,
         "executor": "@nx/js:prune-lockfile",
         "outputs": [
-          "{workspaceRoot}/apps/test-project/api-server/dist/package.json",
-          "{workspaceRoot}/apps/test-project/api-server/dist/pnpm-lock.yaml"
+          "{workspaceRoot}/apps/groups/backend-server/dist/package.json",
+          "{workspaceRoot}/apps/groups/backend-server/dist/pnpm-lock.yaml"
         ],
         "options": {
           "buildTarget": "build"
@@ -53,7 +42,7 @@
         ],
         "cache": true,
         "outputs": [
-          "{workspaceRoot}/apps/test-project/api-server/dist/workspace_modules"
+          "{workspaceRoot}/apps/groups/backend-server/dist/workspace_modules"
         ],
         "executor": "@nx/js:copy-workspace-modules",
         "options": {
@@ -75,30 +64,21 @@
           "build"
         ],
         "options": {
-          "buildTarget": "@git-branch/api-server:build",
+          "buildTarget": "@git-branch/backend-server:build",
           "runBuildTargetDependencies": false
         },
         "configurations": {
           "development": {
-            "buildTarget": "@git-branch/api-server:build:development"
+            "buildTarget": "@git-branch/backend-server:build:development"
           },
           "production": {
-            "buildTarget": "@git-branch/api-server:build:production"
+            "buildTarget": "@git-branch/backend-server:build:production"
           }
         }
       },
       "test": {
         "options": {
           "passWithNoTests": true
-        }
-      },
-      "nx-release-publish": {
-        "executor": "@nx/js:release-publish",
-        "dependsOn": [
-          "build"
-        ],
-        "options": {
-          "packageRoot": "{projectRoot}/dist"
         }
       }
     }

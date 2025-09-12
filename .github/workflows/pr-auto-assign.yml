@@ -1,0 +1,186 @@
+name: PR Auto Assign (Reviewers & Assignee)
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  auto-assign:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auto assign reviewers and assignee
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const prNumber = pr.number;
+            const author = pr.user.login;
+            const isDraft = !!pr.draft;
+
+            // 결과 수집 로그
+            const result = {
+              reviewersRequested: [],
+              reviewerTeamsRequested: [],
+              reviewersErrors: [],
+              assigneeAdded: null,
+              assigneeError: null,
+              codeownersFound: false,
+            };
+
+            // 1) CODEOWNERS 파싱 시도
+            let codeownersText = '';
+            try {
+              const { data } = await github.rest.repos.getContent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: '.github/CODEOWNERS'
+              });
+              codeownersText = Buffer.from(data.content, 'base64').toString('utf8');
+              result.codeownersFound = true;
+            } catch (e) {
+              console.log('CODEOWNERS not found or inaccessible, continuing with fallbacks');
+            }
+
+            // 2) 리뷰어 후보 추출
+            const reviewerUsers = new Set();
+            const reviewerTeams = new Set(); // org/team
+
+            if (codeownersText) {
+              const lines = codeownersText.split('\n');
+              for (const rawLine of lines) {
+                const line = rawLine.trim();
+                if (!line || line.startsWith('#')) continue;
+                // 패턴 뒤의 소유자 목록 추출
+                const parts = line.split(/\s+/);
+                if (parts.length < 2) continue;
+                const owners = parts.slice(1);
+                for (const owner of owners) {
+                  if (!owner.startsWith('@')) continue;
+                  const ident = owner.slice(1);
+                  if (ident.includes('/')) {
+                    // org/team 형태
+                    reviewerTeams.add(ident);
+                  } else {
+                    // user
+                    reviewerUsers.add(ident);
+                  }
+                }
+              }
+            }
+
+            // 작성자 제외
+            reviewerUsers.delete(author);
+
+            // 3) 리뷰어 요청 (Draft PR은 요청 스킵)
+            if (!isDraft) {
+              try {
+                // 팀 리뷰어는 org/team에서 team slug만 추출 필요 (org는 자동 인식)
+                const teamReviewersByOrg = {};
+                for (const full of reviewerTeams) {
+                  const [org, team] = full.split('/');
+                  if (!org || !team) continue;
+                  if (!teamReviewersByOrg[org]) teamReviewersByOrg[org] = new Set();
+                  teamReviewersByOrg[org].add(team);
+                }
+
+                // GitHub API는 한 번에 team_reviewers를 보낼 때 org context가 repo org와 같아야 함
+                // 개인 레포 또는 포크에서는 실패할 수 있으므로, 사용자 리뷰어 먼저 시도, 팀 리뷰어는 best-effort
+
+                // 사용자 리뷰어 요청
+                const users = Array.from(reviewerUsers);
+                if (users.length > 0) {
+                  try {
+                    await github.rest.pulls.requestReviewers({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      pull_number: prNumber,
+                      reviewers: users,
+                    });
+                    result.reviewersRequested.push(...users);
+                  } catch (e) {
+                    result.reviewersErrors.push(`users: ${e.message}`);
+                  }
+                }
+
+                // 팀 리뷰어 요청 (동일 org 기준으로만 요청 가능 → org 다르면 스킵)
+                for (const [org, teamsSet] of Object.entries(teamReviewersByOrg)) {
+                  const teams = Array.from(teamsSet);
+                  try {
+                    await github.rest.pulls.requestReviewers({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      pull_number: prNumber,
+                      team_reviewers: teams,
+                    });
+                    result.reviewerTeamsRequested.push(...teams.map(t => `${org}/${t}`));
+                  } catch (e) {
+                    result.reviewersErrors.push(`teams(${org}): ${e.message}`);
+                  }
+                }
+              } catch (e) {
+                result.reviewersErrors.push(`general: ${e.message}`);
+              }
+            } else {
+              console.log('Draft PR detected: skipping reviewer request');
+            }
+
+            // 4) Assignee 자동 설정 (담당자 없으면 작성자 지정)
+            try {
+              const { data: issue } = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+              });
+              const currentAssignees = (issue.assignees || []).map(u => u.login);
+              if (currentAssignees.length === 0) {
+                try {
+                  await github.rest.issues.addAssignees({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    assignees: [author],
+                  });
+                  result.assigneeAdded = author;
+                } catch (e) {
+                  result.assigneeError = e.message;
+                }
+              } else {
+                console.log('Assignees already set:', currentAssignees.join(', '));
+              }
+            } catch (e) {
+              result.assigneeError = e.message;
+            }
+
+            // 5) 결과 코멘트 (정보용)
+            const lines = [];
+            lines.push('🤖 **PR 자동 배정 결과**');
+            lines.push('');
+            lines.push(`- CODEOWNERS 찾음: ${result.codeownersFound ? '✅' : '❌'}`);
+            if (!isDraft) {
+              lines.push(`- 사용자 리뷰어 요청: ${result.reviewersRequested.length > 0 ? result.reviewersRequested.join(', ') : '없음'}`);
+              lines.push(`- 팀 리뷰어 요청: ${result.reviewerTeamsRequested.length > 0 ? result.reviewerTeamsRequested.join(', ') : '없음'}`);
+              if (result.reviewersErrors.length > 0) {
+                lines.push(`- 리뷰어 요청 오류: ${result.reviewersErrors.join(' | ')}`);
+              }
+            } else {
+              lines.push('- Draft PR: 리뷰어 요청 생략');
+            }
+            lines.push(`- 담당자 설정: ${result.assigneeAdded ? '@' + result.assigneeAdded : '변경 없음'}`);
+            if (result.assigneeError) {
+              lines.push(`- 담당자 설정 오류: ${result.assigneeError}`);
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: lines.join('\n')
+            });

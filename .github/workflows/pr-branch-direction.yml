@@ -1,0 +1,69 @@
+name: PR Branch Direction (GitFlow Validation)
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  validate-branch-direction:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Validate GitFlow Direction
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            (async () => {
+              const pr = context.payload.pull_request;
+              const from = pr.head.ref;   // source branch
+              const to = pr.base.ref;     // target branch
+
+              const re = {
+                feature: /^(feature|feat)\//i,
+                fix: /^(fix|bugfix)\//i,
+                hotfix: /^hotfix\//i,
+                release: /^release\//i,
+                develop: /^develop(ment)?$/i,
+                main: /^(main|master)$/i,
+              };
+
+              // Allowed mappings (GitFlow)
+              const allowed = [
+                { from: re.feature, to: re.develop, reason: 'feature는 develop으로 병합' },
+                { from: re.fix,     to: re.develop, reason: 'fix는 develop으로 병합' },
+                { from: re.hotfix,  to: re.main,    reason: 'hotfix는 main/master로 병합' },
+                { from: re.hotfix,  to: re.develop, reason: 'hotfix 변경사항을 develop에도 반영' },
+                { from: re.develop, to: re.release, reason: 'develop에서 release 분기 생성' },
+                { from: re.release, to: re.main,    reason: 'release는 main/master로 배포' },
+                { from: re.release, to: re.develop, reason: 'release 종료 후 develop에 백머지' },
+                { from: re.main,    to: re.develop, reason: 'main 변경을 develop에 백머지' },
+              ];
+
+              const isMatch = (pattern, value) => pattern instanceof RegExp ? pattern.test(value) : pattern === value;
+
+              let ok = false;
+              let matchedReason = '';
+              for (const rule of allowed) {
+                if (isMatch(rule.from, from) && isMatch(rule.to, to)) {
+                  ok = true;
+                  matchedReason = rule.reason;
+                  break;
+                }
+              }
+
+              if (ok) {
+                console.log(`✅ GitFlow 규칙 통과: ${from} → ${to} (${matchedReason})`);
+                return;
+              }
+
+              // Block if not allowed
+              const message = `❌ GitFlow 규칙 위반: \`${from}\` → \`${to}\`\n` +
+                              `허용되지 않는 브랜치 방향입니다. 표준 방향 예시:\n` +
+                              `- feature/* → develop\n- fix/* → develop\n- hotfix/* → main (또는 develop 병행 반영)\n` +
+                              `- develop → release/*\n- release/* → main, develop (백머지)\n- main → develop (백머지)`;
+              core.setFailed(message);
+            })().catch(e => core.setFailed(e.message));

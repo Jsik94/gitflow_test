@@ -1,0 +1,21 @@
+name: PR Release & Changelog (Dummy)
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  release-changelog-dummy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Start dummy release/changelog pre-check
+        run: |
+          echo "[release-changelog] Starting dummy pre-check"
+          echo "[release-changelog] PR #${{ github.event.pull_request.number }}"
+          echo "[release-changelog] from: ${{ github.event.pull_request.head.ref }}"
+          echo "[release-changelog] to:   ${{ github.event.pull_request.base.ref }}"
+          echo "[release-changelog] (add real validation here later)"

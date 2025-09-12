@@ -1,0 +1,23 @@
+name: PR Build & Test (Dummy)
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  build-test-dummy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start dummy build & test
+        run: |
+          echo "[build] Starting dummy build"
+          echo "[build] node $(node -v)"
+          echo "[test] Starting dummy tests"
+          echo "[test] (add unit/e2e matrix here later)"
