@@ -12,7 +12,7 @@ export class AppService {
   private todos: Todo[] = [
     {
       id: 1,
-      title: '첫 번째 할 일이다',
+      title: '첫 번째 할 일이다 알겠느냐',
       completed: false,
       createdAt: new Date(),
     },
