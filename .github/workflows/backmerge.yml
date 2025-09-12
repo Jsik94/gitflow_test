@@ -47,25 +47,20 @@ jobs:
             exit 0
           fi
           
-          # Release 브랜치인지 확인
+          # Release 또는 Hotfix 브랜치인지 확인
           if [[ "$SOURCE_BRANCH" =~ ^release/ ]]; then
             echo "needed=true" >> $GITHUB_OUTPUT
             echo "target_branch=develop" >> $GITHUB_OUTPUT
             echo "Release PR detected: will backmerge main to develop"
+          elif [[ "$SOURCE_BRANCH" =~ ^hotfix/ ]]; then
+            echo "needed=true" >> $GITHUB_OUTPUT
+            echo "target_branch=develop" >> $GITHUB_OUTPUT
+            echo "Hotfix PR detected: will backmerge main to develop"
           else
-            # 일반 PR의 경우 source 브랜치에 main을 merge
-            git fetch origin main
-            BEHIND_COUNT=$(git rev-list --count origin/$SOURCE_BRANCH..origin/main)
-            
-            if [ "$BEHIND_COUNT" -gt 0 ]; then
-              echo "needed=true" >> $GITHUB_OUTPUT
-              echo "target_branch=$SOURCE_BRANCH" >> $GITHUB_OUTPUT
-              echo "Backmerge needed: main is $BEHIND_COUNT commits ahead of $SOURCE_BRANCH"
-            else
-              echo "needed=false" >> $GITHUB_OUTPUT
-              echo "target_branch=$SOURCE_BRANCH" >> $GITHUB_OUTPUT
-              echo "No backmerge needed: $SOURCE_BRANCH is up to date with main"
-            fi
+            # main으로의 PR은 release/hotfix만 가능하므로 이 경우는 없어야 함
+            echo "needed=false" >> $GITHUB_OUTPUT
+            echo "target_branch=develop" >> $GITHUB_OUTPUT
+            echo "Unexpected PR type: $SOURCE_BRANCH -> main (expected release/ or hotfix/)"
           fi
       
       - name: Perform backmerge
